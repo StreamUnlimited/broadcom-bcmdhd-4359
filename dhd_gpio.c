@@ -3,11 +3,6 @@
 #include <dhd_linux.h>
 #include <linux/gpio.h>
 
-#ifdef CUSTOMER_HW_PLATFORM
-#include <plat/sdhci.h>
-#define	sdmmc_channel	sdmmc_device_mmc0
-#endif /* CUSTOMER_HW_PLATFORM */
-
 #if defined(BUS_POWER_RESTORE) && defined(BCMSDIO)
 #include <linux/mmc/core.h>
 #include <linux/mmc/card.h>
@@ -43,14 +38,15 @@ dhd_wlan_set_power(int on
 			}
 		}
 #if defined(BUS_POWER_RESTORE)
-#if defined(BCMSDIO)
+#if defined(BCMSDIO) && (LINUX_VERSION_CODE < KERNEL_VERSION(4, 19, 0))
 		if (adapter->sdio_func && adapter->sdio_func->card && adapter->sdio_func->card->host) {
+			mdelay(100);
 			printf("======== mmc_power_restore_host! ========\n");
 			mmc_power_restore_host(adapter->sdio_func->card->host);
 		}
 #elif defined(BCMPCIE)
-		OSL_SLEEP(50); /* delay needed to be able to restore PCIe configuration registers */
 		if (adapter->pci_dev) {
+			mdelay(100);
 			printf("======== pci_set_power_state PCI_D0! ========\n");
 			pci_set_power_state(adapter->pci_dev, PCI_D0);
 			if (adapter->pci_saved_state)
@@ -67,7 +63,7 @@ dhd_wlan_set_power(int on
 		mdelay(100);
 	} else {
 #if defined(BUS_POWER_RESTORE)
-#if defined(BCMSDIO)
+#if defined(BCMSDIO) && (LINUX_VERSION_CODE < KERNEL_VERSION(4, 19, 0))
 		if (adapter->sdio_func && adapter->sdio_func->card && adapter->sdio_func->card->host) {
 			printf("======== mmc_power_save_host! ========\n");
 			mmc_power_save_host(adapter->sdio_func->card->host);
@@ -130,18 +126,29 @@ static int dhd_wlan_set_carddetect(int present)
 	return err;
 }
 
-static int dhd_wlan_get_mac_addr(unsigned char *buf)
+static int dhd_wlan_get_mac_addr(unsigned char *buf
+#ifdef CUSTOM_MULTI_MAC
+	, char *name
+#endif
+)
 {
 	int err = 0;
 
-	printf("======== %s ========\n", __FUNCTION__);
+#ifdef CUSTOM_MULTI_MAC
+	if (!strcmp("wlan1", name)) {
 #ifdef EXAMPLE_GET_MAC
-	/* EXAMPLE code */
-	{
 		struct ether_addr ea_example = {{0x00, 0x11, 0x22, 0x33, 0x44, 0xFF}};
 		bcopy((char *)&ea_example, buf, sizeof(struct ether_addr));
-	}
 #endif /* EXAMPLE_GET_MAC */
+	} else
+#endif /* CUSTOM_MULTI_MAC */
+	{
+#ifdef EXAMPLE_GET_MAC
+		struct ether_addr ea_example = {{0x02, 0x11, 0x22, 0x33, 0x44, 0x55}};
+		bcopy((char *)&ea_example, buf, sizeof(struct ether_addr));
+#endif /* EXAMPLE_GET_MAC */
+	}
+
 #ifdef EXAMPLE_GET_MAC_VER2
 	/* EXAMPLE code */
 	{
@@ -156,6 +163,8 @@ static int dhd_wlan_get_mac_addr(unsigned char *buf)
 		bcopy(macpad, buf+6, sizeof(macpad));
 	}
 #endif /* EXAMPLE_GET_MAC_VER2 */
+
+	printf("======== %s err=%d ========\n", __FUNCTION__, err);
 
 	return err;
 }
