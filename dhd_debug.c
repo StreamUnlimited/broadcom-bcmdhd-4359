@@ -1413,7 +1413,7 @@ __dhd_dbg_free_tx_pkts(dhd_pub_t *dhdp, dhd_dbg_tx_info_t *tx_pkts,
 	count = 0;
 	while ((count < pkt_count) && tx_pkts) {
 		if (tx_pkts->info.pkt) {
-			PKTFREE(dhdp->osh, tx_pkts->info.pkt, TRUE);
+			linux_pktfree_irq(dhdp->osh, tx_pkts->info.pkt, TRUE);
 		}
 		tx_pkts++;
 		count++;

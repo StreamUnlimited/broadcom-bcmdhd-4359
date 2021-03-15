@@ -35,25 +35,25 @@
 #define AEXT_ERROR(name, arg1, args...) \
 	do { \
 		if (android_msg_level & ANDROID_ERROR_LEVEL) { \
-			printk(KERN_ERR "[dhd-%s] AEXT-ERROR) %s : " arg1, name, __func__, ## args); \
+			printk(KERN_ERR DHD_LOG_PREFIX "[%s] AEXT-ERROR) %s : " arg1, name, __func__, ## args); \
 		} \
 	} while (0)
 #define AEXT_TRACE(name, arg1, args...) \
 	do { \
 		if (android_msg_level & ANDROID_TRACE_LEVEL) { \
-			printk(KERN_INFO "[dhd-%s] AEXT-TRACE) %s : " arg1, name, __func__, ## args); \
+			printk(KERN_INFO DHD_LOG_PREFIX "[%s] AEXT-TRACE) %s : " arg1, name, __func__, ## args); \
 		} \
 	} while (0)
 #define AEXT_INFO(name, arg1, args...) \
 	do { \
 		if (android_msg_level & ANDROID_INFO_LEVEL) { \
-			printk(KERN_INFO "[dhd-%s] AEXT-INFO) %s : " arg1, name, __func__, ## args); \
+			printk(KERN_INFO DHD_LOG_PREFIX "[%s] AEXT-INFO) %s : " arg1, name, __func__, ## args); \
 		} \
 	} while (0)
 #define AEXT_DBG(name, arg1, args...) \
 	do { \
 		if (android_msg_level & ANDROID_DBG_LEVEL) { \
-			printk(KERN_INFO "[dhd-%s] AEXT-DBG) %s : " arg1, name, __func__, ## args); \
+			printk(KERN_INFO DHD_LOG_PREFIX "[%s] AEXT-DBG) %s : " arg1, name, __func__, ## args); \
 		} \
 	} while (0)
 
@@ -83,6 +83,10 @@
 #define CMD_MONITOR				"MONITOR"
 #define CMD_SET_SUSPEND_BCN_LI_DTIM		"SET_SUSPEND_BCN_LI_DTIM"
 #define CMD_WLMSGLEVEL			"WLMSGLEVEL"
+
+#ifdef WLEASYMESH
+#define CMD_EASYMESH "EASYMESH"
+#endif /* WLEASYMESH */
 
 #ifdef WL_EXT_IAPSTA
 #include <net/rtnetlink.h>
@@ -1257,6 +1261,62 @@ wl_ext_wlmsglevel(struct net_device *dev, char *command, int total_len)
 
 	return ret;
 }
+
+#ifdef WLEASYMESH
+//Set map 4 and dwds 1 on wlan0 interface
+#define EASYMESH_SLAVE		"slave"
+#define EASYMESH_MASTER		"master"
+static int
+wl_ext_easymesh(struct net_device *dev, char* command, int total_len)
+{
+	int err = 0, wlc_down = 1, wlc_up = 1;
+	int orig_map = 0, orig_dwds = 0;
+	int map = 4; //default for slave mode
+	int dwds = 1; //default for slave mode
+
+	wl_ext_iovar_getint(dev, "map", &orig_map);
+	wl_ext_iovar_getint(dev, "dwds", &orig_dwds);
+
+	if (strncmp(command, EASYMESH_SLAVE, strlen(EASYMESH_SLAVE)) == 0) {
+		WL_MSG(dev->name, "try to set map %d, dwds %d\n", map, dwds);
+		if ((0x80 == orig_map) && (dwds == orig_dwds)) {
+			WL_MSG(dev->name, "Same map and dwds, ignoring, error = %d\n", err);
+			return 0;
+		}
+		err = wl_ext_ioctl(dev, WLC_DOWN, &wlc_down, sizeof(wlc_down), 1);
+		if (err) {
+			goto exit;
+		}
+		wl_ext_iovar_setint(dev, "map", map);
+		wl_ext_iovar_setint(dev, "dwds", dwds);
+		err = wl_ext_ioctl(dev, WLC_UP, &wlc_up, sizeof(wlc_up), 1);
+		if (err) {
+			goto exit;
+		}
+	}
+	else if (strncmp(command, EASYMESH_MASTER, strlen(EASYMESH_MASTER)) == 0) {
+		map = dwds = 0;
+		WL_MSG(dev->name, "try to set map %d, dwds %d\n", map, dwds);
+		if ((0 == orig_map) && (dwds == orig_dwds)) {
+			WL_MSG(dev->name, "Same map and dwds, ignoring, error = %d\n", err);
+			return 0;
+		}
+		err = wl_ext_ioctl(dev, WLC_DOWN, &wlc_down, sizeof(wlc_down), 1);
+		if (err) {
+			goto exit;
+		}
+		wl_ext_iovar_setint(dev, "map", map);
+		wl_ext_iovar_setint(dev, "dwds", dwds);
+		err = wl_ext_ioctl(dev, WLC_UP, &wlc_up, sizeof(wlc_up), 1);
+		if (err) {
+			goto exit;
+		}
+	}
+
+exit:
+	return err;
+}
+#endif /* WLEASYMESH */
 
 #if defined(SENDPROB) || (defined(WLMESH) && defined(WL_ESCAN))
 static int
@@ -3225,7 +3285,7 @@ wl_ext_isam_peer_path(struct net_device *dev, char *command, int total_len)
 				chan = wl_ext_get_chan(apsta_params, tmp_if->dev);
 				if (chan) {
 					dump_written += snprintf(dump_buf+dump_written, dump_len,
-						"[dhd-%s-%c] mbssid=%pM, mchan=%d, hop=%d, pbssid=%pM",
+						DHD_LOG_PREFIX "[%s-%c] mbssid=%pM, mchan=%d, hop=%d, pbssid=%pM",
 						tmp_if->ifname, tmp_if->prefix, &mesh_info->master_bssid,
 						mesh_info->master_channel, mesh_info->hop_cnt,
 						&mesh_info->peer_bssid);
@@ -3290,7 +3350,7 @@ wl_ext_isam_status(struct net_device *dev, char *command, int total_len)
 					chanspec = wl_ext_get_chanspec(apsta_params, tmp_if->dev);
 					wl_ext_get_sec(tmp_if->dev, tmp_if->ifmode, sec, sizeof(sec));
 					dump_written += snprintf(dump_buf+dump_written, dump_len,
-						"\n[dhd-%s-%c]: bssid=%pM, chan=%3d(0x%x %sMHz), "
+						"\n" DHD_LOG_PREFIX "[%s-%c]: bssid=%pM, chan=%3d(0x%x %sMHz), "
 						"rssi=%3d, sec=%-15s, SSID=\"%s\"",
 						tmp_if->ifname, tmp_if->prefix, &bssid, chan, chanspec,
 						CHSPEC_IS20(chanspec)?"20":
@@ -3311,7 +3371,7 @@ wl_ext_isam_status(struct net_device *dev, char *command, int total_len)
 #endif /* WLMESH */
 				} else {
 					dump_written += snprintf(dump_buf+dump_written, dump_len,
-						"\n[dhd-%s-%c]:", tmp_if->ifname, tmp_if->prefix);
+						"\n" DHD_LOG_PREFIX "[%s-%c]:", tmp_if->ifname, tmp_if->prefix);
 				}
 			}
 		}
@@ -4523,6 +4583,26 @@ wl_legacy_chip_check(struct net_device *net)
 }
 
 bool
+wl_extsae_chip(struct dhd_pub *dhd)
+{
+	uint chip;
+
+	chip = dhd_conf_get_chip(dhd);
+
+	if (chip == BCM43362_CHIP_ID || chip == BCM4330_CHIP_ID ||
+		chip == BCM4334_CHIP_ID || chip == BCM43340_CHIP_ID ||
+		chip == BCM43341_CHIP_ID || chip == BCM4324_CHIP_ID ||
+		chip == BCM4335_CHIP_ID || chip == BCM4339_CHIP_ID ||
+		chip == BCM4354_CHIP_ID ||
+		chip == BCM43143_CHIP_ID || chip == BCM43242_CHIP_ID ||
+		chip == BCM43569_CHIP_ID) {
+		return false;
+	}
+
+	return true;
+}
+
+bool
 wl_new_chip_check(struct net_device *net)
 {
 	struct dhd_pub *dhd = dhd_get_pub(net);
@@ -4530,8 +4610,8 @@ wl_new_chip_check(struct net_device *net)
 
 	chip = dhd_conf_get_chip(dhd);
 
-	if (chip == BCM4359_CHIP_ID ||
-			chip == BCM43012_CHIP_ID || chip == BCM43752_CHIP_ID) {
+	if (chip == BCM4359_CHIP_ID || chip == BCM43012_CHIP_ID ||
+			chip == BCM43751_CHIP_ID || chip == BCM43752_CHIP_ID) {
 		return true;
 	}
 
@@ -5174,7 +5254,7 @@ wl_ext_iapsta_get_rsdb(struct net_device *net, struct dhd_pub *dhd)
 	wl_config_t *rsdb_p;
 	int ret = 0, rsdb = 0;
 
-	if (dhd->conf->chip == BCM4359_CHIP_ID) {
+	if (dhd->conf->chip == BCM4359_CHIP_ID || dhd->conf->chip == BCM4375_CHIP_ID) {
 		ret = wldev_iovar_getbuf(net, "rsdb_mode", NULL, 0,
 			iovar_buf, WLC_IOCTL_SMLEN, NULL);
 		if (!ret) {
@@ -5182,7 +5262,12 @@ wl_ext_iapsta_get_rsdb(struct net_device *net, struct dhd_pub *dhd)
 				rsdb = 1;
 			} else {
 				rsdb_p = (wl_config_t *) iovar_buf;
-				rsdb = rsdb_p->config;
+				if (dhd->conf->chip == BCM4375_CHIP_ID)
+					rsdb = rsdb_p->status;
+				else
+					rsdb = rsdb_p->config;
+				AEXT_INFO(net->name, "config=%d, status=%d\n",
+					rsdb_p->config, rsdb_p->status);
 			}
 		}
 	}
@@ -5604,6 +5689,7 @@ wl_ext_tcpka_conn_add(struct net_device *dev, char *data, char *command,
 		if (tcpka == NULL) {
 			AEXT_ERROR(dev->name, "Failed to allocate buffer of %d bytes\n",
 				sizeof(struct tcpka_conn) + ka_payload_len);
+			ret = -1;
 			goto exit;
 		}
 		memset(tcpka, 0, sizeof(struct tcpka_conn) + ka_payload_len);
@@ -5611,14 +5697,17 @@ wl_ext_tcpka_conn_add(struct net_device *dev, char *data, char *command,
 		tcpka->sess_id = sess_id;
 		if (!(ret = bcm_ether_atoe(dst_mac, &tcpka->dst_mac))) {
 			AEXT_ERROR(dev->name, "mac parsing err addr=%s\n", dst_mac);
+			ret = -1;
 			goto exit;
 		}
 		if (!bcm_atoipv4(src_ip, &tcpka->src_ip)) {
 			AEXT_ERROR(dev->name, "src_ip parsing err ip=%s\n", src_ip);
+			ret = -1;
 			goto exit;
 		}
 		if (!bcm_atoipv4(dst_ip, &tcpka->dst_ip)) {
 			AEXT_ERROR(dev->name, "dst_ip parsing err ip=%s\n", dst_ip);
+			ret = -1;
 			goto exit;
 		}
 		tcpka->ipid = ipid;
@@ -5633,6 +5722,7 @@ wl_ext_tcpka_conn_add(struct net_device *dev, char *data, char *command,
 		ka_payload_len = wl_pattern_atoh(ka_payload, (char *)tcpka->ka_payload);
 		if (ka_payload_len == -1) {
 			AEXT_ERROR(dev->name,"rejecting ka_payload=%s\n", ka_payload);
+			ret = -1;
 			goto exit;
 		}
 		tcpka->ka_payload_len = ka_payload_len;
@@ -6160,8 +6250,8 @@ wl_ext_recv_probreq(struct net_device *dev, char *data, char *command,
 				goto exit;
 			dhd->recv_probereq = TRUE;
 		} else {
-			if (dhd->conf->pm)
-				strcpy(cmd, "wl 86 2"); {
+			if (dhd->conf->pm) {
+				strcpy(cmd, "wl 86 2");
 				wl_ext_wl_iovar(dev, cmd, total_len);
 			}
 			strcpy(cmd, "wl event_msg 44 0");
@@ -6855,6 +6945,12 @@ wl_android_ext_priv_cmd(struct net_device *net, char *command,
 	else if (strnicmp(command, CMD_WLMSGLEVEL, strlen(CMD_WLMSGLEVEL)) == 0) {
 		*bytes_written = wl_ext_wlmsglevel(net, command, total_len);
 	}
+#ifdef WLEASYMESH
+    else if (strnicmp(command, CMD_EASYMESH, strlen(CMD_EASYMESH)) == 0) {
+		int skip = strlen(CMD_EASYMESH) + 1;
+		*bytes_written = wl_ext_easymesh(net, command+skip, total_len);
+    }
+#endif /* WLEASYMESH */
 	else if (strnicmp(command, CMD_WL, strlen(CMD_WL)) == 0) {
 		*bytes_written = wl_ext_wl_iovar(net, command, total_len);
 	}

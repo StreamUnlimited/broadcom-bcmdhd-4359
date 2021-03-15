@@ -1414,10 +1414,11 @@ typedef struct dhd_pub {
 #ifdef SENDPROB
 	bool recv_probereq;
 #endif
-#ifdef HOST_TPUT_TEST
-	struct osl_timespec bus_ts;
-	struct osl_timespec net_ts;
-	uint32 net_len;
+#ifdef DHD_NOTIFY_MAC_CHANGED
+	bool skip_dhd_stop;
+#endif /* DHD_NOTIFY_MAC_CHANGED */
+#ifdef WL_EXT_GENL
+	void *zconf;
 #endif
 } dhd_pub_t;
 
@@ -2936,6 +2937,12 @@ extern void *dhd_pub_shim(dhd_pub_t *dhd_pub);
 #ifdef DHD_FW_COREDUMP
 void* dhd_get_fwdump_buf(dhd_pub_t *dhd_pub, uint32 length);
 #endif /* DHD_FW_COREDUMP */
+
+#if defined(SET_XPS_CPUS)
+int dhd_xps_cpus_enable(struct net_device *net, int enable);
+int custom_xps_map_set(struct net_device *net, char *buf, size_t len);
+void custom_xps_map_clear(struct net_device *net);
+#endif
 
 #if defined(SET_RPS_CPUS)
 int dhd_rps_cpus_enable(struct net_device *net, int enable);

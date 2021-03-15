@@ -629,7 +629,7 @@ dhdpcie_chip_support_msi(dhd_bus_t *bus)
  * 'tcm' is the *host* virtual address at which tcm is mapped.
  */
 int dhdpcie_bus_attach(osl_t *osh, dhd_bus_t **bus_ptr,
-	volatile char *regs, volatile char *tcm, void *pci_dev)
+	volatile char *regs, volatile char *tcm, void *pci_dev, wifi_adapter_info_t *adapter)
 {
 	dhd_bus_t *bus = NULL;
 	int ret = BCME_OK;
@@ -642,6 +642,9 @@ int dhdpcie_bus_attach(osl_t *osh, dhd_bus_t **bus_ptr,
 			ret = BCME_NORESOURCE;
 			break;
 		}
+		bus->bus = adapter->bus_type;
+		bus->bus_num = adapter->bus_num;
+		bus->slot_num = adapter->slot_num;
 
 		bus->regs = regs;
 		bus->tcm = tcm;
@@ -675,6 +678,9 @@ int dhdpcie_bus_attach(osl_t *osh, dhd_bus_t **bus_ptr,
 			ret = BCME_NORESOURCE;
 			break;
 		}
+#if defined(GET_OTP_MAC_ENABLE) || defined(GET_OTP_MODULE_NAME)
+		dhd_conf_get_otp(bus->dhd, bus->sih);
+#endif
 		DHD_ERROR(("%s: making DHD_BUS_DOWN\n", __FUNCTION__));
 		bus->dhd->busstate = DHD_BUS_DOWN;
 		bus->dhd->hostrdy_after_init = TRUE;
@@ -795,6 +801,14 @@ uint dhd_bus_chippkg_id(dhd_pub_t *dhdp)
 {
 	dhd_bus_t *bus = dhdp->bus;
 	return bus->sih->chippkg;
+}
+
+int dhd_bus_get_ids(struct dhd_bus *bus, uint32 *bus_type, uint32 *bus_num, uint32 *slot_num)
+{
+	*bus_type = bus->bus;
+	*bus_num = bus->bus_num;
+	*slot_num = bus->slot_num;
+	return 0;
 }
 
 /** Conduct Loopback test */
@@ -991,7 +1005,7 @@ dhdpcie_bus_isr(dhd_bus_t *bus)
 	uint32 intstatus = 0;
 
 	do {
-		DHD_TRACE(("%s: Enter\n", __FUNCTION__));
+		DHD_INTR(("%s: Enter\n", __FUNCTION__));
 		/* verify argument */
 		if (!bus) {
 			DHD_LOG_MEM(("%s : bus is null pointer, exit \n", __FUNCTION__));
@@ -1114,12 +1128,12 @@ skip_intstatus_read:
 		dhd_sched_dpc(bus->dhd);     /* queue DPC now!! */
 #endif /* defined(SDIO_ISR_THREAD) */
 
-		DHD_TRACE(("%s: Exit Success DPC Queued\n", __FUNCTION__));
+		DHD_INTR(("%s: Exit Success DPC Queued\n", __FUNCTION__));
 		return TRUE;
 
 	} while (0);
 
-	DHD_TRACE(("%s: Exit Failure\n", __FUNCTION__));
+	DHD_INTR(("%s: Exit Failure\n", __FUNCTION__));
 	return FALSE;
 }
 
@@ -9307,7 +9321,7 @@ void dhd_bus_clean_flow_ring(dhd_bus_t *bus, void *node)
 	ASSERT(DHD_FLOW_QUEUE_EMPTY(queue));
 
 	/* Reinitialise flowring's queue */
-	dhd_flow_queue_reinit(bus->dhd, queue, FLOW_RING_QUEUE_THRESHOLD);
+	dhd_flow_queue_reinit(bus->dhd, queue, bus->dhd->conf->flow_ring_queue_threshold);
 	flow_ring_node->status = FLOW_RING_STATUS_CLOSED;
 	flow_ring_node->active = FALSE;
 

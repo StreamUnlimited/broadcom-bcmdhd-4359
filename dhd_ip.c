@@ -38,6 +38,7 @@
 #include <dhd_dbg.h>
 
 #include <dhd_ip.h>
+#include <dhd_config.h>
 
 #if defined(DHDTCPACK_SUPPRESS) || defined(DHDTCPSYNC_FLOOD_BLK)
 #include <dhd_bus.h>
@@ -496,8 +497,8 @@ int dhd_tcpack_suppress_set(dhd_pub_t *dhdp, uint8 mode)
 #endif /* BCMSDIO */
 #ifdef BCMPCIE
 		case TCPACK_SUP_HOLD:
-			dhdp->tcpack_sup_ratio = CUSTOM_TCPACK_SUPP_RATIO;
-			dhdp->tcpack_sup_delay = CUSTOM_TCPACK_DELAY_TIME;
+			dhdp->tcpack_sup_ratio = dhdp->conf->tcpack_sup_ratio;
+			dhdp->tcpack_sup_delay = dhdp->conf->tcpack_sup_delay;
 			for (i = 0; i < TCPACK_INFO_MAXNUM; i++) {
 				tcpack_info_t *tcpack_info_tbl =
 					&tcpack_sup_module->tcpack_info_tbl[i];

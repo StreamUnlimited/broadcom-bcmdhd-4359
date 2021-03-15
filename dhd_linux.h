@@ -261,7 +261,6 @@ typedef struct wifi_adapter_info {
 #if defined(BT_OVER_SDIO)
 	const char	*btfw_path;
 #endif /* defined (BT_OVER_SDIO) */
-#ifdef BUS_POWER_RESTORE
 #if defined(BCMSDIO)
 	struct sdio_func *sdio_func;
 #endif /* BCMSDIO */
@@ -269,7 +268,6 @@ typedef struct wifi_adapter_info {
 	struct pci_dev *pci_dev;
 	struct pci_saved_state *pci_saved_state;
 #endif /* BCMPCIE */
-#endif
 } wifi_adapter_info_t;
 
 #define WLAN_PLAT_NODFS_FLAG	0x01

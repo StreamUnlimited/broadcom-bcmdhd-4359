@@ -32,6 +32,7 @@ extern uint dhd_doflow;
 extern uint dhd_slpauto;
 #endif
 
+#ifdef SET_FWNV_BY_MAC
 typedef struct wl_mac_range {
 	uint32 oui;
 	uint32 nic_start;
@@ -48,6 +49,7 @@ typedef struct wl_mac_list_ctrl {
 	int count;
 	struct wl_mac_list *m_mac_list_head;
 } wl_mac_list_ctrl_t;
+#endif
 
 typedef struct wl_chip_nv_path {
 	uint chip;
@@ -160,14 +162,19 @@ enum eapol_status {
 };
 
 typedef struct dhd_conf {
+	uint devid;
 	uint chip;
 	uint chiprev;
+#if defined(BCMPCIE)
+	uint svid;
+	uint ssid;
+#endif
 #ifdef GET_OTP_MODULE_NAME
 	char module_name[16];
 #endif
 	struct ether_addr otp_mac;
 	int fw_type;
-#ifdef BCMSDIO
+#ifdef SET_FWNV_BY_MAC
 	wl_mac_list_ctrl_t fw_by_mac;
 	wl_mac_list_ctrl_t nv_by_mac;
 #endif
@@ -221,6 +228,9 @@ typedef struct dhd_conf {
 	int txglom_bucket_size;
 	int txinrx_thres;
 	int dhd_txminmax; // -1=DATABUFCNT(bus)
+#ifdef DYNAMIC_MAX_HDR_READ
+	int max_hdr_read;
+#endif
 	bool oob_enabled_later;
 #ifdef MINIME
 	uint32 ramsize;
@@ -237,9 +247,11 @@ typedef struct dhd_conf {
 #endif
 #ifdef BCMPCIE
 	int bus_deepsleep_disable;
+	int flow_ring_queue_threshold;
 #endif
 	int dpc_cpucore;
 	int rxf_cpucore;
+	int dhd_dpc_prio;
 	int frameburst;
 	bool deepsleep;
 	int pm;
@@ -248,6 +260,8 @@ typedef struct dhd_conf {
 	int suspend_bcn_li_dtim;
 #ifdef DHDTCPACK_SUPPRESS
 	uint8 tcpack_sup_mode;
+	uint32 tcpack_sup_ratio;
+	uint32 tcpack_sup_delay;
 #endif
 	int pktprio8021x;
 	uint insuspend;
@@ -291,6 +305,20 @@ typedef struct dhd_conf {
 #endif /* DYNAMIC_PROPTX_MAXCOUNT */
 #ifdef HOST_TPUT_TEST
 	int data_drop_mode;
+	uint tput_measure_ms;
+	struct osl_timespec tput_ts;
+	unsigned long net_len;
+#endif
+#ifdef DHD_TPUT_PATCH
+	bool tput_patch;
+	int mtu;
+	bool pktsetsum;
+#endif
+#if defined(SET_XPS_CPUS)
+	bool xps_cpus;
+#endif
+#if defined(SET_RPS_CPUS)
+	bool rps_cpus;
 #endif
 } dhd_conf_t;
 
@@ -300,6 +328,9 @@ void dhd_conf_get_otp(dhd_pub_t *dhd, bcmsdh_info_t *sdh, si_t *sih);
 void dhd_conf_set_hw_oob_intr(bcmsdh_info_t *sdh, struct si_pub *sih);
 #endif
 void dhd_conf_set_txglom_params(dhd_pub_t *dhd, bool enable);
+#endif
+#ifdef BCMPCIE
+int dhd_conf_get_otp(dhd_pub_t *dhd, si_t *sih);
 #endif
 void dhd_conf_set_path_params(dhd_pub_t *dhd, char *fw_path, char *nv_path);
 int dhd_conf_set_intiovar(dhd_pub_t *dhd, uint cmd, char *name, int val,
@@ -334,6 +365,9 @@ void dhd_conf_set_garp(dhd_pub_t *dhd, int ifidx, uint32 ipa, bool enable);
 #endif
 #ifdef PROP_TXSTATUS
 int dhd_conf_get_disable_proptx(dhd_pub_t *dhd);
+#endif
+#ifdef HOST_TPUT_TEST
+void dhd_conf_tput_measure(dhd_pub_t *dhd);
 #endif
 uint dhd_conf_get_insuspend(dhd_pub_t *dhd, uint mask);
 int dhd_conf_set_suspend_resume(dhd_pub_t *dhd, int suspend);

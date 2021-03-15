@@ -80,8 +80,8 @@ struct wl_ibss;
 #if defined(WL_SAE) && (LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0))
 #error "Can not support WL_SAE befor kernel 3.14"
 #endif
-#if defined(WL_CLIENT_SAE) && (LINUX_VERSION_CODE < KERNEL_VERSION(4, 9, 0))
-#error "Can not support WL_CLIENT_SAE before kernel 4.9"
+#if defined(WL_CLIENT_SAE) && (LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0))
+#error "Can not support WL_CLIENT_SAE before kernel 3.10"
 #endif
 #if defined(WL_CLIENT_SAE) && defined(WL_SAE)
 #error "WL_SAE is for dongle-offload and WL_CLIENT_SAE is for wpa_supplicant. Please choose one."
@@ -166,8 +166,8 @@ extern char *dhd_log_dump_get_timestamp(void);
 /* 0 invalidates all debug messages.  default is 1 */
 #define WL_DBG_LEVEL 0xFF
 
-#define CFG80211_INFO_TEXT		"[dhd] CFG80211-INFO) "
-#define CFG80211_ERROR_TEXT		"[dhd] CFG80211-ERROR) "
+#define CFG80211_INFO_TEXT		DHD_LOG_PREFIXS "CFG80211-INFO) "
+#define CFG80211_ERROR_TEXT		DHD_LOG_PREFIXS "CFG80211-ERROR) "
 
 #if defined(DHD_DEBUG)
 #ifdef DHD_LOG_DUMP
@@ -273,7 +273,7 @@ do {	\
 #define	WL_INFORM_MSG(x, args...)									\
 do {										\
 	if (wl_dbg_level & WL_DBG_INFO) {				\
-		printk(KERN_INFO "[dhd] CFG80211-INFO) %s : " x, __func__, ## args);	\
+		printk(KERN_INFO DHD_LOG_PREFIXS "CFG80211-INFO) %s : " x, __func__, ## args);	\
 	}								\
 } while (0)
 #define WL_INFORM(x) WL_INFORM_MSG x
@@ -284,7 +284,7 @@ do {										\
 #define	WL_SCAN_MSG(x, args...)								\
 do {									\
 	if (wl_dbg_level & WL_DBG_SCAN) {			\
-		printk(KERN_INFO "[dhd] CFG80211-SCAN) %s :" x, __func__, ## args);	\
+		printk(KERN_INFO DHD_LOG_PREFIXS "CFG80211-SCAN) %s :" x, __func__, ## args);	\
 	}									\
 } while (0)
 #define WL_SCAN(x) WL_SCAN_MSG x
@@ -294,7 +294,7 @@ do {									\
 #define	WL_TRACE_MSG(x, args...)								\
 do {									\
 	if (wl_dbg_level & WL_DBG_TRACE) {			\
-		printk(KERN_INFO "[dhd] CFG80211-TRACE) %s :" x, __func__, ## args); \
+		printk(KERN_INFO DHD_LOG_PREFIXS "CFG80211-TRACE) %s :" x, __func__, ## args); \
 	}									\
 } while (0)
 #define WL_TRACE(x) WL_TRACE_MSG x
@@ -306,7 +306,7 @@ do {									\
 #define	WL_DBG_MSG(x, args...)								\
 do {									\
 	if (wl_dbg_level & WL_DBG_DBG) {			\
-		printk(KERN_INFO "[dhd] CFG80211-DEBUG) %s :" x, __func__, ## args); \
+		printk(KERN_INFO DHD_LOG_PREFIXS "CFG80211-DEBUG) %s :" x, __func__, ## args); \
 	}									\
 } while (0)
 #define WL_DBG(x) WL_DBG_MSG x

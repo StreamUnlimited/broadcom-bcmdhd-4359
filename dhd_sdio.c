@@ -158,7 +158,11 @@ static int dhdsdio_resume(void *context);
  */
 #if (PMU_MAX_TRANSITION_DLY <= 1000000)
 #undef PMU_MAX_TRANSITION_DLY
+#ifdef NO_EXT32K
+#define PMU_MAX_TRANSITION_DLY (1000000*5)
+#else
 #define PMU_MAX_TRANSITION_DLY 1000000
+#endif
 #endif // endif
 
 /* hooks for limiting threshold custom tx num in rx processing */
@@ -286,7 +290,11 @@ typedef struct dhd_bus {
 	uint8		tx_seq;			/* Transmit sequence number (next) */
 	uint8		tx_max;			/* Maximum transmit sequence allowed */
 
+#ifdef DYNAMIC_MAX_HDR_READ
+	uint8		*hdrbufp;
+#else
 	uint8		hdrbuf[MAX_HDR_READ + DHD_SDALIGN];
+#endif
 	uint8		*rxhdr;			/* Header of current rx frame (in hdrbuf) */
 	uint16		nextlen;		/* Next Read Len from last header */
 	uint8		rx_seq;			/* Receive sequence number (expected) */
@@ -534,7 +542,11 @@ static uint mesbusyctrl = 0;
 static uint watermark = 8;
 static uint mesbusyctrl = 0;
 #endif /* BCMSPI */
+#ifdef DYNAMIC_MAX_HDR_READ
+uint firstread = DHD_FIRSTREAD;
+#else
 static const uint firstread = DHD_FIRSTREAD;
+#endif
 
 /* Retry count for register access failures */
 static const uint retry_limit = 2;
@@ -937,6 +949,10 @@ dhdsdio_sr_cap(dhd_bus_t *bus)
 	}
 	if (
 		0) {
+			core_capext = FALSE;
+	} else if ((bus->sih->chip == BCM4330_CHIP_ID) ||
+		(bus->sih->chip == BCM43362_CHIP_ID) ||
+		(BCM4347_CHIP(bus->sih->chip))) {
 			core_capext = FALSE;
 	} else if ((bus->sih->chip == BCM4335_CHIP_ID) ||
 		(bus->sih->chip == BCM4339_CHIP_ID) ||
@@ -1791,6 +1807,12 @@ dhdsdio_bussleep(dhd_bus_t *bus, bool sleep)
 			bcmsdh_cfg_write(sdh, SDIO_FUNC_1, SBSDIO_DEVICE_CTL,
 					SBSDIO_DEVCTL_PADS_ISO, NULL);
 		} else {
+#ifdef FORCE_SWOOB_ENABLE
+			/* Tell device to start using OOB wakeup */
+			W_SDREG(SMB_USE_OOB, &regs->tosbmailbox, retries);
+			if (retries > retry_limit)
+				DHD_ERROR(("CANNOT SIGNAL CHIP, WILL NOT WAKE UP!!\n"));
+#endif
 			/* Leave interrupts enabled since device can exit sleep and
 			 * interrupt host
 			 */
@@ -1837,6 +1859,12 @@ dhdsdio_bussleep(dhd_bus_t *bus, bool sleep)
 			}
 		} else {
 			err = dhdsdio_clk_devsleep_iovar(bus, FALSE /* wake */);
+#ifdef FORCE_SWOOB_ENABLE
+			/* Send misc interrupt to indicate OOB not needed */
+			W_SDREG(0, &regs->tosbmailboxdata, retries);
+			if (retries <= retry_limit)
+				W_SDREG(SMB_DEV_INT, &regs->tosbmailbox, retries);
+#endif
 #ifdef BT_OVER_SDIO
 			if (err < 0) {
 				struct net_device *net = NULL;
@@ -7229,6 +7257,10 @@ exit:
 		}
 	}
 
+#ifdef HOST_TPUT_TEST
+	dhd_conf_tput_measure(bus->dhd);
+#endif
+
 	if (bus->ctrl_wait && TXCTLOK(bus))
 		wake_up_interruptible(&bus->ctrl_tx_wait);
 	dhd_os_sdunlock(bus->dhd);
@@ -7344,37 +7376,37 @@ void dhd_bus_dump_txpktstatics(struct dhd_bus *bus)
 	for (i=0;i<bus->tx_statics.glom_max;i++) {
 		total += bus->tx_statics.glom_cnt[i];
 	}
-	printk(KERN_CONT "[dhd] ");
+	printk(KERN_CONT DHD_LOG_PREFIXS);
 	for (i=0;i<bus->tx_statics.glom_max;i++) {
 		printk(KERN_CONT "%02d: %5d", i+1, bus->tx_statics.glom_cnt[i]);
 		if ((i+1)%8)
 			printk(KERN_CONT ", ");
 		else {
 			printk("\n");
-			printk(KERN_CONT "[dhd] ");
+			printk(KERN_CONT DHD_LOG_PREFIXS);
 		}
  	}
 	printk("\n");
-	printk(KERN_CONT "[dhd] ");
+	printk(KERN_CONT DHD_LOG_PREFIXS);
 	for (i=0;i<bus->tx_statics.glom_max;i++) {
 		printk(KERN_CONT "%02d:%5d%%", i+1, (bus->tx_statics.glom_cnt[i]*100)/total);
 		if ((i+1)%8)
 			printk(KERN_CONT ", ");
 		else {
 			printk("\n");
-			printk(KERN_CONT "[dhd] ");
+			printk(KERN_CONT DHD_LOG_PREFIXS);
 		}
 	}
 	printk("\n");
 	printf("%s: Glom spend time distribution(us):\n", __FUNCTION__);
-	printk(KERN_CONT "[dhd] ");
+	printk(KERN_CONT DHD_LOG_PREFIXS);
 	for (i=0;i<bus->tx_statics.glom_max;i++) {
 		printk(KERN_CONT "%02d: %5u", i+1, bus->tx_statics.glom_cnt_us[i]);
 		if ((i+1)%8)
 			printk(KERN_CONT ", ");
 		else {
 			printk("\n");
-			printk(KERN_CONT "[dhd] ");
+			printk(KERN_CONT DHD_LOG_PREFIXS);
 		}
  	}
 	printk("\n");
@@ -8303,11 +8335,6 @@ dhdsdio_probe(uint16 venid, uint16 devid, uint16 bus_no, uint16 slot,
 	dhdsdio_bus_usr_cnt_inc(bus->dhd);
 #endif /* BT_OVER_SDIO */
 
-#ifdef GET_OTP_MAC_ENABLE
-	if (memcmp(&ether_null, &bus->dhd->conf->otp_mac, ETHER_ADDR_LEN))
-		memcpy(bus->dhd->mac.octet, (void *)&bus->dhd->conf->otp_mac, ETHER_ADDR_LEN);
-#endif /* GET_CUSTOM_MAC_ENABLE */
-
 	/* Ok, have the per-port tell the stack we're open for business */
 	if (dhd_attach_net(bus->dhd, TRUE) != 0)
 	{
@@ -8601,7 +8628,9 @@ dhdsdio_probe_attach(struct dhd_bus *bus, osl_t *osh, void *sdh, void *regsva,
 	pktq_init(&bus->txq, (PRIOMASK + 1), QLEN);
 
 	/* Locate an appropriately-aligned portion of hdrbuf */
+#ifndef DYNAMIC_MAX_HDR_READ
 	bus->rxhdr = (uint8 *)ROUNDUP((uintptr)&bus->hdrbuf[0], DHD_SDALIGN);
+#endif
 
 	/* Set the poll and/or interrupt flags */
 	bus->intr = (bool)dhd_intr;
@@ -8793,9 +8822,11 @@ dhd_bus_download_firmware(struct dhd_bus *bus, osl_t *osh,
 	return ret;
 }
 
-void
+int
 dhd_set_bus_params(struct dhd_bus *bus)
 {
+	int ret = 0;
+
 	if (bus->dhd->conf->dhd_poll >= 0) {
 		bus->poll = bus->dhd->conf->dhd_poll;
 		if (!bus->pollrate)
@@ -8817,6 +8848,25 @@ dhd_set_bus_params(struct dhd_bus *bus)
 		printf("%s: set ramsize 0x%x\n", __FUNCTION__, bus->ramsize);
 	}
 #endif
+#ifdef DYNAMIC_MAX_HDR_READ
+	if (bus->dhd->conf->max_hdr_read <= 0) {
+		bus->dhd->conf->max_hdr_read = MAX_HDR_READ;
+	}
+	if (bus->hdrbufp) {
+		MFREE(bus->dhd->osh, bus->hdrbufp, bus->dhd->conf->max_hdr_read + DHD_SDALIGN);
+	}
+	bus->hdrbufp = MALLOC(bus->dhd->osh, bus->dhd->conf->max_hdr_read + DHD_SDALIGN);
+	if (bus->hdrbufp == NULL) {
+		DHD_ERROR(("%s: MALLOC of %d-byte hdrbufp failed\n",
+			__FUNCTION__, bus->dhd->conf->max_hdr_read + DHD_SDALIGN));
+		ret = -1;
+		goto exit;
+	}
+	bus->rxhdr = (uint8 *)ROUNDUP((uintptr)bus->hdrbufp, DHD_SDALIGN);
+
+exit:
+#endif
+	return ret;
 }
 
 static int
@@ -8841,7 +8891,10 @@ dhdsdio_download_firmware(struct dhd_bus *bus, osl_t *osh, void *sdh)
 	DHD_OS_WAKE_LOCK(bus->dhd);
 
 	dhd_conf_set_path_params(bus->dhd, bus->fw_path, bus->nv_path);
-	dhd_set_bus_params(bus);
+	ret = dhd_set_bus_params(bus);
+	if (ret) {
+		goto exit;
+	}
 
 	/* Download the firmware */
 	dhdsdio_clkctl(bus, CLK_AVAIL, FALSE);
@@ -8850,6 +8903,7 @@ dhdsdio_download_firmware(struct dhd_bus *bus, osl_t *osh, void *sdh)
 
 	dhdsdio_clkctl(bus, CLK_SDONLY, FALSE);
 
+exit:
 	DHD_OS_WAKE_UNLOCK(bus->dhd);
 	return ret;
 }
@@ -8893,6 +8947,11 @@ dhdsdio_release(dhd_bus_t *bus, osl_t *osh)
 		if (bus->pad_pkt)
 			PKTFREE(osh, bus->pad_pkt, FALSE);
 #endif /* DHDENABLE_TAILPAD */
+#ifdef DYNAMIC_MAX_HDR_READ
+	if (bus->hdrbufp) {
+		MFREE(osh, bus->hdrbufp, MAX_HDR_READ + DHD_SDALIGN);
+	}
+#endif
 
 		MFREE(osh, bus, sizeof(dhd_bus_t));
 	}

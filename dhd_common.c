@@ -1615,23 +1615,8 @@ dhd_doiovar(dhd_pub_t *dhd_pub, const bcm_iovar_t *vi, uint32 actionid, const ch
 
 #ifndef BCMDBUS
 	case IOV_GVAL(IOV_WDTICK):
-#ifdef HOST_TPUT_TEST
-		if (dhd_pub->net_ts.tv_sec == 0 && dhd_pub->net_ts.tv_nsec == 0) {
-			osl_do_gettimeofday(&dhd_pub->net_ts);
-		} else {
-			struct osl_timespec cur_ts;
-			uint32 diff_ms;
-			osl_do_gettimeofday(&cur_ts);
-			diff_ms = osl_do_gettimediff(&cur_ts, &dhd_pub->net_ts)/1000;
-			int_val = (int32)((dhd_pub->net_len/1024/1024)*8)*1000/diff_ms;
-			dhd_pub->net_len = 0;
-			memcpy(&dhd_pub->net_ts, &cur_ts, sizeof(struct osl_timespec));
-			bcopy(&int_val, arg, sizeof(int_val));
-		}
-#else
 		int_val = (int32)dhd_watchdog_ms;
 		bcopy(&int_val, arg, val_size);
-#endif
 		break;
 #endif /* !BCMDBUS */
 
@@ -1701,23 +1686,8 @@ dhd_doiovar(dhd_pub_t *dhd_pub, const bcm_iovar_t *vi, uint32 actionid, const ch
 		break;
 
 	case IOV_GVAL(IOV_IOCTLTIMEOUT): {
-#ifdef HOST_TPUT_TEST
-		if (dhd_pub->bus_ts.tv_sec == 0 && dhd_pub->bus_ts.tv_nsec == 0) {
-			osl_do_gettimeofday(&dhd_pub->bus_ts);
-		} else {
-			struct osl_timespec cur_ts;
-			uint32 diff_ms;
-			osl_do_gettimeofday(&cur_ts);
-			diff_ms = osl_do_gettimediff(&cur_ts, &dhd_pub->bus_ts)/1000;
-			int_val = (int32)((dhd_pub->dstats.tx_bytes/1024/1024)*8)*1000/diff_ms;
-			dhd_pub->dstats.tx_bytes = 0;
-			memcpy(&dhd_pub->bus_ts, &cur_ts, sizeof(struct osl_timespec));
-			bcopy(&int_val, arg, sizeof(int_val));
-		}
-#else
 		int_val = (int32)dhd_os_get_ioctl_resp_timeout();
 		bcopy(&int_val, arg, sizeof(int_val));
-#endif
 		break;
 	}
 

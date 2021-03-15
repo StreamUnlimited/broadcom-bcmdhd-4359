@@ -134,7 +134,7 @@ enum wl_cfgp2p_status {
 /* dword align allocation */
 #define WLC_IOCTL_MAXLEN 8192
 
-#define CFGP2P_ERROR_TEXT		"[dhd] CFGP2P-ERROR) "
+#define CFGP2P_ERROR_TEXT		DHD_LOG_PREFIXS "CFGP2P-ERROR) "
 
 #ifdef DHD_LOG_DUMP
 #define	CFGP2P_ERR_MSG(x, args...)	\
@@ -149,7 +149,7 @@ enum wl_cfgp2p_status {
 #define	CFGP2P_INFO_MSG(x, args...)									\
 	do {										\
 		if (wl_dbg_level & WL_DBG_INFO) {				\
-			printk(KERN_INFO "[dhd] CFGP2P-INFO) %s : " x, __func__, ## args);	\
+			printk(KERN_INFO DHD_LOG_PREFIXS "CFGP2P-INFO) %s : " x, __func__, ## args);	\
 			DHD_LOG_DUMP_WRITE("[%s] %s: ", dhd_log_dump_get_timestamp(), __func__);	\
 			DHD_LOG_DUMP_WRITE(x, ## args);	\
 		}									\
@@ -158,7 +158,7 @@ enum wl_cfgp2p_status {
 #define	CFGP2P_ACTION_MSG(x, args...)								\
 	do {									\
 		if (wl_dbg_level & WL_DBG_P2P_ACTION) {			\
-			printk(KERN_INFO "[dhd] CFGP2P-ACTION) %s :" x, __func__, ## args);	\
+			printk(KERN_INFO DHD_LOG_PREFIXS "CFGP2P-ACTION) %s :" x, __func__, ## args);	\
 			DHD_LOG_DUMP_WRITE("[%s] %s: ", dhd_log_dump_get_timestamp(), __func__);	\
 			DHD_LOG_DUMP_WRITE(x, ## args);	\
 		}									\
@@ -175,14 +175,14 @@ enum wl_cfgp2p_status {
 #define	CFGP2P_INFO_MSG(x, args...)									\
 	do {										\
 		if (wl_dbg_level & WL_DBG_INFO) {				\
-			printk(KERN_INFO "[dhd] CFGP2P-INFO) %s : " x, __func__, ## args);	\
+			printk(KERN_INFO DHD_LOG_PREFIXS "CFGP2P-INFO) %s : " x, __func__, ## args);	\
 		}									\
 	} while (0)
 #define CFGP2P_INFO(x) CFGP2P_INFO_MSG x
 #define	CFGP2P_ACTION_MSG(x, args...)								\
 	do {									\
 		if (wl_dbg_level & WL_DBG_P2P_ACTION) {			\
-			printk(KERN_INFO "[dhd] CFGP2P-ACTION) %s :" x, __func__, ## args);	\
+			printk(KERN_INFO DHD_LOG_PREFIXS "CFGP2P-ACTION) %s :" x, __func__, ## args);	\
 		}									\
 	} while (0)
 #define CFGP2P_ACTION(x) CFGP2P_ACTION_MSG x
@@ -191,7 +191,7 @@ enum wl_cfgp2p_status {
 #define	CFGP2P_DBG_MSG(x, args...)								\
 	do {									\
 		if (wl_dbg_level & WL_DBG_DBG) {			\
-			printk(KERN_INFO "[dhd] CFGP2P-DEBUG) %s :" x, __func__, ## args);	\
+			printk(KERN_INFO DHD_LOG_PREFIXS "CFGP2P-DEBUG) %s :" x, __func__, ## args);	\
 		}									\
 	} while (0)
 #define CFGP2P_DBG(x) CFGP2P_DBG_MSG x

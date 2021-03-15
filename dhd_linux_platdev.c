@@ -590,7 +590,7 @@ static int wifi_ctrlfunc_register_drv(void)
 void wifi_ctrlfunc_unregister_drv(void)
 {
 #ifndef CONFIG_DTS
-	wifi_adapter_info_t *adapter;
+	wifi_adapter_info_t *adapter = NULL;
 #endif
 
 #if defined(CONFIG_DTS) && !defined(CUSTOMER_HW)
@@ -942,6 +942,19 @@ static int dhd_wifi_platform_load_usb(void)
 	s32 timeout = -1;
 	int i;
 	enum wifi_adapter_status wait_status;
+#endif
+
+#if !defined(DHD_PRELOAD)
+	/* power down all adapters */
+	for (i = 0; i < dhd_wifi_platdata->num_adapters; i++) {
+		adapter = &dhd_wifi_platdata->adapters[i];
+		wifi_platform_set_power(adapter, FALSE, 0);
+		if (err) {
+			DHD_ERROR(("failed to wifi_platform_set_power on %s\n", adapter->name));
+			goto exit;
+		}
+	}
+	OSL_SLEEP(200);
 #endif
 
 	err = dhd_bus_register();

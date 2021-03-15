@@ -49,13 +49,13 @@
 
 #define	WLDEV_ERROR_MSG(x, args...)						\
 	do {												\
-		printk(KERN_INFO "[dhd] WLDEV-ERROR) " x, ## args);	\
+		printk(KERN_INFO DHD_LOG_PREFIXS "WLDEV-ERROR) " x, ## args);	\
 	} while (0)
 #define WLDEV_ERROR(x) WLDEV_ERROR_MSG x
 
 #define	WLDEV_INFO_MSG(x, args...)						\
 	do {												\
-		printk(KERN_INFO "[dhd] WLDEV-INFO) " x, ## args);	\
+		printk(KERN_INFO DHD_LOG_PREFIXS "WLDEV-INFO) " x, ## args);	\
 	} while (0)
 #define WLDEV_INFO(x) WLDEV_INFO_MSG x
 

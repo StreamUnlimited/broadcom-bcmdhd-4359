@@ -436,7 +436,8 @@ dhd_os_dbg_get_feature(dhd_pub_t *dhdp, int32 *features)
 	*features = 0;
 #ifdef DEBUGABILITY
 	// fix for RequestFirmwareDebugDump issue of VTS
-	if (dhdp->conf->chip != BCM43752_CHIP_ID)
+	if ((dhdp->conf->chip != BCM43751_CHIP_ID) && (dhdp->conf->chip != BCM43752_CHIP_ID) &&
+			(dhdp->conf->chip != BCM4375_CHIP_ID))
 		*features |= DBG_MEMORY_DUMP_SUPPORTED;
 	if (FW_SUPPORTED(dhdp, logtrace)) {
 		*features |= DBG_CONNECT_EVENT_SUPPORTED;

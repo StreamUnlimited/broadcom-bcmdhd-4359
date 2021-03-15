@@ -32,6 +32,7 @@
 
 #include <bcmpcie.h>
 #include <hnd_cons.h>
+#include <dhd_linux.h>
 
 /* defines */
 #define PCIE_SHARED_VERSION		PCIE_SHARED_VERSION_7
@@ -209,6 +210,8 @@ typedef struct dhd_bus {
 	uint32		srmemsize;		/* Size of SRMEM */
 
 	uint32		bus;			/* gSPI or SDIO bus */
+	uint32		bus_num;		/* bus number */
+	uint32		slot_num;		/* slot ID */
 	uint32		intstatus;		/* Intstatus bits (events) pending */
 	bool		dpc_sched;		/* Indicates DPC schedule (intrpt rcvd) */
 	bool		fcstate;		/* State of dongle flow-control */
@@ -382,7 +385,7 @@ extern void dhdpcie_bus_unregister(void);
 extern bool dhdpcie_chipmatch(uint16 vendor, uint16 device);
 
 extern int dhdpcie_bus_attach(osl_t *osh, dhd_bus_t **bus_ptr,
-	volatile char *regs, volatile char *tcm, void *pci_dev);
+	volatile char *regs, volatile char *tcm, void *pci_dev, wifi_adapter_info_t *adapter);
 extern uint32 dhdpcie_bus_cfg_read_dword(struct dhd_bus *bus, uint32 addr, uint32 size);
 extern void dhdpcie_bus_cfg_write_dword(struct dhd_bus *bus, uint32 addr, uint32 size, uint32 data);
 extern void dhdpcie_bus_intr_enable(struct dhd_bus *bus);

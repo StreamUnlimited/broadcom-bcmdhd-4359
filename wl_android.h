@@ -78,7 +78,7 @@ typedef struct _compat_android_wifi_priv_cmd {
 #define WL_MSG(name, arg1, args...) \
 	do { \
 		if (android_msg_level & ANDROID_MSG_LEVEL) { \
-			printk(KERN_ERR "[dhd-%s] %s : " arg1, name, __func__, ## args); \
+			printk(KERN_ERR DHD_LOG_PREFIX "[%s] %s : " arg1, name, __func__, ## args); \
 		} \
 	} while (0)
 
@@ -96,7 +96,7 @@ do {	\
 		memcmp(&static_tmp, cmp, size)) { \
 			__err_ts = __cur_ts; \
 			memcpy(static_tmp, cmp, size); \
-			printk(KERN_ERR "[dhd-%s] %s : [%u times] " arg1, \
+			printk(KERN_ERR DHD_LOG_PREFIX "[%s] %s : [%u times] " arg1, \
 				name, __func__, __err_cnt, ## args); \
 			__err_cnt = 0; \
 		} else { \
@@ -116,6 +116,10 @@ int wl_android_wifi_on(struct net_device *dev);
 int wl_android_wifi_off(struct net_device *dev, bool on_failure);
 int wl_android_priv_cmd(struct net_device *net, struct ifreq *ifr);
 int wl_handle_private_cmd(struct net_device *net, char *command, u32 cmd_len);
+#ifdef WL_EXT_GENL
+int wl_ext_genl_init(struct net_device *net);
+void wl_ext_genl_deinit(struct net_device *net);
+#endif
 #ifdef WL_EXT_IAPSTA
 int wl_ext_iapsta_attach_netdev(struct net_device *net, int ifidx, uint8 bssidx);
 int wl_ext_iapsta_attach_name(struct net_device *net, int ifidx);
@@ -132,6 +136,7 @@ void wl_ext_iapsta_dettach(dhd_pub_t *pub);
 #ifdef WL_CFG80211
 bool wl_legacy_chip_check(struct net_device *net);
 bool wl_new_chip_check(struct net_device *net);
+bool wl_extsae_chip(struct dhd_pub *dhd);
 u32 wl_ext_iapsta_update_channel(dhd_pub_t *dhd, struct net_device *dev, u32 channel);
 void wl_ext_iapsta_update_iftype(struct net_device *net, int ifidx, int wl_iftype);
 bool wl_ext_iapsta_iftype_enabled(struct net_device *net, int wl_iftype);

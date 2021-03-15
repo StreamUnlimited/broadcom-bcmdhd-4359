@@ -56,25 +56,25 @@ uint iw_msg_level = WL_ERROR_LEVEL;
 #define WL_ERROR_MSG(x, args...) \
 	do { \
 		if (iw_msg_level & WL_ERROR_LEVEL) { \
-			printk(KERN_ERR "[dhd] WEXT-ERROR) %s : " x, __func__, ## args); \
+			printk(KERN_ERR DHD_LOG_PREFIXS "WEXT-ERROR) %s : " x, __func__, ## args); \
 		} \
 	} while (0)
 #define WL_TRACE_MSG(x, args...) \
 	do { \
 		if (iw_msg_level & WL_TRACE_LEVEL) { \
-			printk(KERN_INFO "[dhd] WEXT-TRACE) %s : " x, __func__, ## args); \
+			printk(KERN_INFO DHD_LOG_PREFIXS "WEXT-TRACE) %s : " x, __func__, ## args); \
 		} \
 	} while (0)
 #define WL_SCAN_MSG(x, args...) \
 	do { \
 		if (iw_msg_level & WL_SCAN_LEVEL) { \
-			printk(KERN_INFO "[dhd] WEXT-SCAN) %s : " x, __func__, ## args); \
+			printk(KERN_INFO DHD_LOG_PREFIXS "WEXT-SCAN) %s : " x, __func__, ## args); \
 		} \
 	} while (0)
 #define WL_WSEC_MSG(x, args...) \
 	do { \
 		if (iw_msg_level & WL_WSEC_LEVEL) { \
-			printk(KERN_INFO "[dhd] WEXT-WSEC) %s : " x, __func__, ## args); \
+			printk(KERN_INFO DHD_LOG_PREFIXS "WEXT-WSEC) %s : " x, __func__, ## args); \
 		} \
 	} while (0)
 #define WL_ERROR(x) WL_ERROR_MSG x
@@ -282,12 +282,18 @@ dev_wlc_ioctl(
 )
 {
 	struct ifreq ifr;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 	wl_ioctl_t ioc;
 	mm_segment_t fs;
+#else
+	dhd_ioctl_t ioc;
+	int8 index;
+	struct dhd_pub *dhd = dhd_get_pub(dev);
+#endif
 	int ret;
 
 	memset(&ioc, 0, sizeof(ioc));
-#ifdef CONFIG_COMPAT
+#if defined(CONFIG_COMPAT) && (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 	ioc.cmd = cmd | WLC_SPEC_FLAG;
 #else
 	ioc.cmd = cmd;
@@ -299,6 +305,7 @@ dev_wlc_ioctl(
 	ifr.ifr_name[sizeof(ifr.ifr_name) - 1] = '\0';
 	ifr.ifr_data = (caddr_t) &ioc;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 	fs = get_fs();
 	set_fs(get_ds());
 #if defined(WL_USE_NETDEV_OPS)
@@ -307,6 +314,14 @@ dev_wlc_ioctl(
 	ret = dev->do_ioctl(dev, &ifr, SIOCDEVPRIVATE);
 #endif
 	set_fs(fs);
+#else
+	index = dhd_net2idx(dhd->info, dev);
+	if (index == DHD_BAD_IF) {
+		WL_ERROR(("Bad ifidx from dev:%p\n", dev));
+		return -ENODEV;
+	}
+	ret = dhd_ioctl_process(dhd, index, &ioc, arg);
+#endif
 
 	return ret;
 }
@@ -618,7 +633,7 @@ done:
 
 #define DHD_CHECK(dhd, dev) \
  	if (!dhd) { \
-		WL_ERROR (("[dhd-%s] %s: dhd is NULL\n", dev->name, __FUNCTION__)); \
+		WL_ERROR (("[%s] dhd is NULL\n", dev->name)); \
 		return -ENODEV; \
 	} \
 

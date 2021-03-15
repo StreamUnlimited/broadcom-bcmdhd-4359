@@ -17,6 +17,7 @@ enum escan_state {
 
 typedef struct wl_escan_info {
 	struct net_device *dev;
+	bool scan_params_v2;
 	dhd_pub_t *pub;
 	timer_list_compat_t scan_timeout; /* Timer for catch scan event timeout */
 	int escan_state;

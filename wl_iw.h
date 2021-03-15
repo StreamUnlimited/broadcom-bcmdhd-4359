@@ -38,7 +38,7 @@
 #include <dngl_stats.h>
 #include <dhd.h>
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 0, 0)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 0, 0)) && (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 #define get_ds()    (KERNEL_DS)
 #endif
 
