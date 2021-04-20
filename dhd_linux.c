@@ -977,6 +977,43 @@ struct dhd_if * dhd_get_ifp(dhd_pub_t *dhdp, uint32 ifidx)
 	return dhdp->info->iflist[ifidx];
 }
 
+#ifdef WLEASYMESH
+int
+dhd_set_1905_almac(dhd_pub_t *dhdp, uint8 ifidx, uint8* ea, bool mcast)
+{
+	dhd_if_t *ifp;
+
+	ASSERT(ea != NULL);
+	ifp = dhd_get_ifp(dhdp, ifidx);
+	if (ifp == NULL) {
+		return BCME_ERROR;
+	}
+	if (mcast) {
+		memcpy(ifp->_1905_al_mcast, ea, ETHER_ADDR_LEN);
+	} else {
+		memcpy(ifp->_1905_al_ucast, ea, ETHER_ADDR_LEN);
+	}
+	return BCME_OK;
+}
+int
+dhd_get_1905_almac(dhd_pub_t *dhdp, uint8 ifidx, uint8* ea, bool mcast)
+{
+	dhd_if_t *ifp;
+
+	ASSERT(ea != NULL);
+	ifp = dhd_get_ifp(dhdp, ifidx);
+	if (ifp == NULL) {
+		return BCME_ERROR;
+	}
+	if (mcast) {
+		memcpy(ea, ifp->_1905_al_mcast, ETHER_ADDR_LEN);
+	} else {
+		memcpy(ea, ifp->_1905_al_ucast, ETHER_ADDR_LEN);
+	}
+	return BCME_OK;
+}
+#endif /* WLEASYMESH */
+
 #ifdef PCIE_FULL_DONGLE
 
 /** Dummy objects are defined with state representing bad|down.
@@ -2830,9 +2867,9 @@ dhd_ifadd_event_handler(void *handle, void *event_info, u8 event)
 			mac_addr = NULL;
 		}
 
-#if defined(WLDWDS) && defined(FOURADDR_AUTO_BRG)
+#ifdef WLEASYMESH
 		if ((ndev = wl_cfg80211_post_ifcreate(dhd->pub.info->iflist[0]->net,
-			&info, mac_addr, NULL, true)) == NULL)
+			&info, mac_addr, if_event->name, true)) == NULL)
 #else
 		if (wl_cfg80211_post_ifcreate(dhd->pub.info->iflist[0]->net,
 			&info, mac_addr, NULL, true) == NULL)
@@ -2880,7 +2917,9 @@ dhd_ifadd_event_handler(void *handle, void *event_info, u8 event)
 done:
 	MFREE(dhd->pub.osh, if_event, sizeof(dhd_if_event_t));
 #if defined(WLDWDS) && defined(FOURADDR_AUTO_BRG)
-	dhd_bridge_dev_set(dhd, ifidx, ndev);
+	if (dhd->pub.info->iflist[ifidx]) {
+		dhd_bridge_dev_set(dhd, ifidx, ndev);
+    }
 #endif /* defiend(WLDWDS) && defined(FOURADDR_AUTO_BRG) */
 
 	DHD_PERIM_UNLOCK(&dhd->pub);
@@ -2917,7 +2956,9 @@ dhd_ifdel_event_handler(void *handle, void *event_info, u8 event)
 	ifidx = if_event->event.ifidx;
 	DHD_TRACE(("Removing interface with idx %d\n", ifidx));
 #if defined(WLDWDS) && defined(FOURADDR_AUTO_BRG)
-	dhd_bridge_dev_set(dhd, ifidx, NULL);
+	if (dhd->pub.info->iflist[ifidx]) {
+		dhd_bridge_dev_set(dhd, ifidx, NULL);
+    }
 #endif /* defiend(WLDWDS) && defined(FOURADDR_AUTO_BRG) */
 
 	DHD_PERIM_UNLOCK(&dhd->pub);
@@ -4670,6 +4711,25 @@ dhd_rx_frame(dhd_pub_t *dhdp, int ifidx, void *pktbuf, int numpkt, uint8 chan)
 				continue;
 		}
 #endif /* DHD_POST_EAPOL_M1_AFTER_ROAM_EVT */
+#ifdef WLEASYMESH
+		if ((dhdp->conf->fw_type == FW_TYPE_EZMESH) &&
+				(ntoh16(eh->ether_type) != ETHER_TYPE_BRCM)) {
+			uint16 * da = (uint16 *)(eh->ether_dhost);
+			ASSERT(ISALIGNED(da, 2));
+
+			/* XXX: Special handling for 1905 messages
+			 * if DA matches with configured 1905 AL MAC addresses
+			 * bypass fwder and foward it to linux stack
+			 */
+			if (ntoh16(eh->ether_type) == ETHER_TYPE_1905_1) {
+				if (!eacmp(da, ifp->_1905_al_ucast) || !eacmp(da, ifp->_1905_al_mcast)) {
+					//skb->fwr_flood = 0;
+				} else {
+					//skb->fwr_flood = 1;
+				}
+			}
+		}
+#endif /* WLEASYMESH */
 		/* Get the protocol, maintain skb around eth_type_trans()
 		 * The main reason for this hack is for the limitation of
 		 * Linux 2.4 where 'eth_type_trans' uses the 'net->hard_header_len'
@@ -6528,12 +6588,10 @@ dhd_ioctl_entry(struct net_device *net, struct ifreq *ifr, int cmd)
 		}
 	}
 
-#ifndef CONFIG_VTS_SUPPORT
 	if (!capable(CAP_NET_ADMIN)) {
 		bcmerror = BCME_EPERM;
 		goto done;
 	}
-#endif
 
 	/* Take backup of ioc.buf and restore later */
 	ioc_buf_user = ioc.buf;
@@ -6679,7 +6737,7 @@ dhd_stop(struct net_device *net)
 	dhd_info_t *dhd = DHD_DEV_INFO(net);
 	DHD_OS_WAKE_LOCK(&dhd->pub);
 	DHD_PERIM_LOCK(&dhd->pub);
-	printf("%s: Enter %s\n", __FUNCTION__, net->name);
+	WL_MSG(net->name, "Enter\n");
 	dhd->pub.rxcnt_timeout = 0;
 	dhd->pub.txcnt_timeout = 0;
 
@@ -6708,7 +6766,7 @@ dhd_stop(struct net_device *net)
 #if defined(WL_STATIC_IF) && defined(WL_CFG80211)
 	/* If static if is operational, don't reset the chip */
 	if (IS_CFG80211_STATIC_IF_ACTIVE(cfg)) {
-		DHD_ERROR(("static if operational. skip chip reset.\n"));
+		WL_MSG(net->name, "static if operational. skip chip reset.\n");
 		skip_reset = true;
 		wl_cfg80211_sta_ifdown(net);
 		goto exit;
@@ -6930,7 +6988,7 @@ exit:
 		DHD_OS_WAKE_LOCK_DESTROY(dhd);
 		dhd->dhd_state &= ~DHD_ATTACH_STATE_WAKELOCKS_INIT;
 	}
-	printf("%s: Exit %s\n", __FUNCTION__, net->name);
+	WL_MSG(net->name, "Exit\n");
 
 	mutex_unlock(&dhd->pub.ndev_op_sync);
 	return 0;
@@ -6979,7 +7037,7 @@ dhd_open(struct net_device *net)
 
 	if (dhd->pub.up == 1) {
 		/* already up */
-		DHD_ERROR(("Primary net_device is already up \n"));
+		WL_MSG(net->name, "Primary net_device is already up\n");
 		mutex_unlock(&dhd->pub.ndev_op_sync);
 		return BCME_OK;
 	}
@@ -6992,7 +7050,7 @@ dhd_open(struct net_device *net)
 		}
 	}
 
-	printf("%s: Enter %s\n", __FUNCTION__, net->name);
+	WL_MSG(net->name, "Enter\n");
 	DHD_MUTEX_LOCK();
 	/* Init wakelock */
 	if (!dhd_download_fw_on_driverload) {
@@ -7321,7 +7379,7 @@ exit:
 	DHD_OS_WAKE_UNLOCK(&dhd->pub);
 	DHD_MUTEX_UNLOCK();
 
-	printf("%s: Exit %s ret=%d\n", __FUNCTION__, net->name, ret);
+	WL_MSG(net->name, "Exit ret=%d\n", ret);
 	return ret;
 }
 
@@ -7341,7 +7399,7 @@ dhd_pri_open(struct net_device *net)
 
 	/* Allow transmit calls */
 	netif_start_queue(net);
-	DHD_ERROR(("[%s] tx queue started\n", net->name));
+	WL_MSG(net->name, "tx queue started\n");
 
 #if defined(SET_RPS_CPUS)
 	dhd_rps_cpus_enable(net, TRUE);
@@ -7364,7 +7422,7 @@ dhd_pri_stop(struct net_device *net)
 
 	/* stop tx queue */
 	netif_stop_queue(net);
-	DHD_ERROR(("[%s] tx queue stopped\n", net->name));
+	WL_MSG(net->name, "tx queue stopped\n");
 
 	ret = dhd_stop(net);
 	if (unlikely(ret)) {
@@ -7386,6 +7444,9 @@ dhd_static_if_open(struct net_device *net)
 	s32 ret = 0;
 	struct bcm_cfg80211 *cfg;
 	struct net_device *primary_netdev = NULL;
+#ifdef WLEASYMESH
+	dhd_info_t *dhd = DHD_DEV_INFO(net);
+#endif /* WLEASYMESH */
 
 	cfg = wl_get_cfg(net);
 	primary_netdev = bcmcfg_to_prmry_ndev(cfg);
@@ -7396,10 +7457,20 @@ dhd_static_if_open(struct net_device *net)
 		goto done;
 	}
 
-	printf("%s: Enter %s\n", __FUNCTION__, net->name);
+	WL_MSG(net->name, "Enter\n");
 	/* Ensure fw is initialized. If it is already initialized,
 	 * dhd_open will return success.
 	 */
+#ifdef WLEASYMESH
+	WL_MSG(net->name, "switch to EasyMesh fw\n");
+	dhd->pub.conf->fw_type = FW_TYPE_EZMESH;
+	ret = dhd_stop(primary_netdev);
+	if (unlikely(ret)) {
+		printf("===>%s, Failed to close primary dev ret %d\n", __FUNCTION__, ret);
+		goto done;
+	}
+	OSL_SLEEP(1);
+#endif /* WLEASYMESH */
 	ret = dhd_open(primary_netdev);
 	if (unlikely(ret)) {
 		DHD_ERROR(("Failed to open primary dev ret %d\n", ret));
@@ -7412,7 +7483,7 @@ dhd_static_if_open(struct net_device *net)
 		netif_start_queue(net);
 	}
 done:
-	printf("%s: Exit %s ret=%d\n", __FUNCTION__, net->name, ret);
+	WL_MSG(net->name, "Exit ret=%d\n", ret);
 	return ret;
 }
 
@@ -7424,7 +7495,7 @@ dhd_static_if_stop(struct net_device *net)
 	int ret = BCME_OK;
 	dhd_info_t *dhd = DHD_DEV_INFO(net);
 
-	printf("%s: Enter %s\n", __FUNCTION__, net->name);
+	WL_MSG(net->name, "Enter\n");
 
 	cfg = wl_get_cfg(net);
 	if (!IS_CFG80211_STATIC_IF(cfg, net)) {
@@ -7452,12 +7523,19 @@ dhd_static_if_stop(struct net_device *net)
 	* context.
 	*/
 	primary_netdev = bcmcfg_to_prmry_ndev(cfg);
+#ifdef WLEASYMESH
+	if (dhd->pub.conf->fw_type == FW_TYPE_EZMESH) {
+		ret = dhd_stop(primary_netdev);
+		WL_MSG(net->name, "switch to STA fw\n");
+		dhd->pub.conf->fw_type = FW_TYPE_STA;
+	} else
+#endif /* WLEASYMESH */
 	if (!(primary_netdev->flags & IFF_UP)) {
 		ret = dhd_stop(primary_netdev);
 	} else {
 		DHD_ERROR(("Skipped dhd_stop, as sta is operational\n"));
 	}
-	printf("%s: Exit %s ret=%d\n", __FUNCTION__, net->name, ret);
+	WL_MSG(net->name, "Exit ret=%d\n", ret);
 
 	return ret;
 }

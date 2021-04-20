@@ -249,6 +249,9 @@ sdioh_attach(osl_t *osh, struct sdio_func *func)
 	}
 
 	sdio_claim_host(sd->func[2]);
+	if ((func->device == SDIO_DEVICE_ID_BROADCOM_43362 ||
+			func->device == SDIO_DEVICE_ID_BROADCOM_4330) && sd_f2_blocksize > 128)
+		sd_f2_blocksize = 128;
 	sd->client_block_size[2] = sd_f2_blocksize;
 	printf("%s: set sd_f2_blocksize %d\n", __FUNCTION__, sd_f2_blocksize);
 	err_ret = sdio_set_block_size(sd->func[2], sd_f2_blocksize);

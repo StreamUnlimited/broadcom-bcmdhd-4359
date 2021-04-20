@@ -89,6 +89,7 @@
 #define ETHER_TYPE_WAI		0x88b4		/* WAI */
 #define ETHER_TYPE_89_0D	0x890d		/* 89-0d frame for TDLS */
 #define ETHER_TYPE_RRB		ETHER_TYPE_89_0D  /* RRB 802.11r 2008 */
+#define ETHER_TYPE_1905_1	0x893a      /* IEEE 1905.1 MCDU */
 
 #define ETHER_TYPE_PPP_SES	0x8864		/* PPPoE Session */
 

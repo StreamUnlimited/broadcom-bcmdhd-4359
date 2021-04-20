@@ -6545,13 +6545,25 @@ wl_cfg80211_static_if_open(struct net_device *net)
 	struct net_device *primary_ndev = bcmcfg_to_prmry_ndev(cfg);
 	u16 iftype = net->ieee80211_ptr ? net->ieee80211_ptr->iftype : 0;
 	u16 wl_iftype, wl_mode;
+#if defined(CUSTOM_MULTI_MAC) || defined(WLEASYMESH)
+	dhd_pub_t *dhd = dhd_get_pub(net);
+#endif
 #ifdef CUSTOM_MULTI_MAC
 	char hw_ether[62];
-	dhd_pub_t *dhd = dhd_get_pub(net);
 #endif
 
 	WL_INFORM_MEM(("[STATIC_IF] dev_open ndev %p and wdev %p\n", net, net->ieee80211_ptr));
 	ASSERT(cfg->static_ndev == net);
+
+#if defined(WLEASYMESH)
+	if (dhd->conf->fw_type == FW_TYPE_EZMESH && NL80211_IFTYPE_AP != iftype) {
+		WL_MSG(net->name, "Set wlan1 iftype to AP for easymesh\n");
+		iftype = NL80211_IFTYPE_AP;
+		if (net->ieee80211_ptr) {
+			net->ieee80211_ptr->iftype = iftype;
+		}
+	}
+#endif /* WLEASYMESH */
 
 	if (cfg80211_to_wl_iftype(iftype, &wl_iftype, &wl_mode) <  0) {
 		return BCME_ERROR;

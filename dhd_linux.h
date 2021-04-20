@@ -135,6 +135,10 @@ typedef struct dhd_if {
 	u64 last_sync;
 	struct work_struct  blk_tsfl_work;
 #endif /* DHDTCPSYNC_FLOOD_BLK */
+#ifdef WLEASYMESH
+	uint8 _1905_al_ucast[ETHER_ADDR_LEN];
+	uint8 _1905_al_mcast[ETHER_ADDR_LEN];
+#endif /* WLEASYMESH */
 } dhd_if_t;
 
 struct ipv6_work_info_t {

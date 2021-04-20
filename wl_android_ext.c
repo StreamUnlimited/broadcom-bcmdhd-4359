@@ -84,10 +84,6 @@
 #define CMD_SET_SUSPEND_BCN_LI_DTIM		"SET_SUSPEND_BCN_LI_DTIM"
 #define CMD_WLMSGLEVEL			"WLMSGLEVEL"
 
-#ifdef WLEASYMESH
-#define CMD_EASYMESH "EASYMESH"
-#endif /* WLEASYMESH */
-
 #ifdef WL_EXT_IAPSTA
 #include <net/rtnetlink.h>
 #define CMD_IAPSTA_INIT			"IAPSTA_INIT"
@@ -1263,58 +1259,45 @@ wl_ext_wlmsglevel(struct net_device *dev, char *command, int total_len)
 }
 
 #ifdef WLEASYMESH
+#define CMD_EASYMESH "EASYMESH"
 //Set map 4 and dwds 1 on wlan0 interface
 #define EASYMESH_SLAVE		"slave"
 #define EASYMESH_MASTER		"master"
+
 static int
 wl_ext_easymesh(struct net_device *dev, char* command, int total_len)
 {
-	int err = 0, wlc_down = 1, wlc_up = 1;
-	int orig_map = 0, orig_dwds = 0;
-	int map = 4; //default for slave mode
-	int dwds = 1; //default for slave mode
+	int ret = 0, wlc_down = 1, wlc_up = 1, map = 4, dwds = 1;
 
-	wl_ext_iovar_getint(dev, "map", &orig_map);
-	wl_ext_iovar_getint(dev, "dwds", &orig_dwds);
-
+	AEXT_TRACE(dev->name, "command=%s, len=%d\n", command, total_len);
 	if (strncmp(command, EASYMESH_SLAVE, strlen(EASYMESH_SLAVE)) == 0) {
 		WL_MSG(dev->name, "try to set map %d, dwds %d\n", map, dwds);
-		if ((0x80 == orig_map) && (dwds == orig_dwds)) {
-			WL_MSG(dev->name, "Same map and dwds, ignoring, error = %d\n", err);
-			return 0;
-		}
-		err = wl_ext_ioctl(dev, WLC_DOWN, &wlc_down, sizeof(wlc_down), 1);
-		if (err) {
+		ret = wl_ext_ioctl(dev, WLC_DOWN, &wlc_down, sizeof(wlc_down), 1);
+		if (ret)
 			goto exit;
-		}
 		wl_ext_iovar_setint(dev, "map", map);
 		wl_ext_iovar_setint(dev, "dwds", dwds);
-		err = wl_ext_ioctl(dev, WLC_UP, &wlc_up, sizeof(wlc_up), 1);
-		if (err) {
+		ret = wl_ext_ioctl(dev, WLC_UP, &wlc_up, sizeof(wlc_up), 1);
+		if (ret)
 			goto exit;
-		}
 	}
 	else if (strncmp(command, EASYMESH_MASTER, strlen(EASYMESH_MASTER)) == 0) {
 		map = dwds = 0;
 		WL_MSG(dev->name, "try to set map %d, dwds %d\n", map, dwds);
-		if ((0 == orig_map) && (dwds == orig_dwds)) {
-			WL_MSG(dev->name, "Same map and dwds, ignoring, error = %d\n", err);
-			return 0;
-		}
-		err = wl_ext_ioctl(dev, WLC_DOWN, &wlc_down, sizeof(wlc_down), 1);
-		if (err) {
+		ret = wl_ext_ioctl(dev, WLC_DOWN, &wlc_down, sizeof(wlc_down), 1);
+		if (ret) {
 			goto exit;
 		}
 		wl_ext_iovar_setint(dev, "map", map);
 		wl_ext_iovar_setint(dev, "dwds", dwds);
-		err = wl_ext_ioctl(dev, WLC_UP, &wlc_up, sizeof(wlc_up), 1);
-		if (err) {
+		ret = wl_ext_ioctl(dev, WLC_UP, &wlc_up, sizeof(wlc_up), 1);
+		if (ret) {
 			goto exit;
 		}
 	}
 
 exit:
-	return err;
+	return ret;
 }
 #endif /* WLEASYMESH */
 
@@ -4593,7 +4576,7 @@ wl_extsae_chip(struct dhd_pub *dhd)
 		chip == BCM4334_CHIP_ID || chip == BCM43340_CHIP_ID ||
 		chip == BCM43341_CHIP_ID || chip == BCM4324_CHIP_ID ||
 		chip == BCM4335_CHIP_ID || chip == BCM4339_CHIP_ID ||
-		chip == BCM4354_CHIP_ID ||
+		chip == BCM4354_CHIP_ID || chip == BCM4356_CHIP_ID ||
 		chip == BCM43143_CHIP_ID || chip == BCM43242_CHIP_ID ||
 		chip == BCM43569_CHIP_ID) {
 		return false;
@@ -4940,6 +4923,26 @@ wl_ext_in4way_sync_sta(dhd_pub_t *dhd, struct wl_if_info *cur_if,
 				}
 				wake_up_interruptible(&dhd->conf->event_complete);
 			}
+#ifdef WL_CLIENT_SAE
+			if (action & STA_START_AUTH_DELAY) {
+				struct wireless_dev *wdev = dev->ieee80211_ptr;
+				max_wait_cnt = 30;
+				while (max_wait_cnt) {
+					if (wdev->conn_owner_nlportid)
+						break;
+					AEXT_INFO(dev->name, "status=%d, max_wait_cnt=%d, waiting...\n",
+						status, max_wait_cnt);
+					mutex_unlock(&apsta_params->in4way_sync);
+					OSL_SLEEP(10);
+					mutex_lock(&apsta_params->in4way_sync);
+					max_wait_cnt--;
+				}
+				if (max_wait_cnt == 0) {
+					ret = -1;
+					break;
+				}
+			}
+#endif
 			break;
 		case WL_EXT_STATUS_CONNECTED:
 			if (cur_if->ifmode == ISTA_MODE) {

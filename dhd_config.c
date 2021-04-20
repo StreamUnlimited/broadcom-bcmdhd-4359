@@ -400,6 +400,8 @@ dhd_conf_set_fw_name_by_mac(dhd_pub_t *dhd, char *fw_path)
 		fw_type = FW_TYPE_P2P;
 	else if (strstr(name_ptr, "_mesh"))
 		fw_type = FW_TYPE_MESH;
+	else if (strstr(name_ptr, "_ezmesh"))
+		fw_type = FW_TYPE_EZMESH;
 	else if (strstr(name_ptr, "_es"))
 		fw_type = FW_TYPE_ES;
 	else if (strstr(name_ptr, "_mfg"))
@@ -416,6 +418,8 @@ dhd_conf_set_fw_name_by_mac(dhd_pub_t *dhd, char *fw_path)
 			fw_type_new = FW_TYPE_P2P;
 		else if (strstr(mac_list[i].name, "_mesh"))
 			fw_type_new = FW_TYPE_MESH;
+		else if (strstr(mac_list[i].name, "_ezmesh"))
+			fw_type_new = FW_TYPE_EZMESH;
 		else if (strstr(mac_list[i].name, "_es"))
 			fw_type_new = FW_TYPE_ES;
 		else if (strstr(mac_list[i].name, "_mfg"))
@@ -784,6 +788,8 @@ dhd_conf_set_fw_name_by_chip(dhd_pub_t *dhd, char *fw_path)
 		fw_type = FW_TYPE_P2P;
 	else if (strstr(name_ptr, "_mesh"))
 		fw_type = FW_TYPE_MESH;
+	else if (strstr(name_ptr, "_ezmesh"))
+		fw_type = FW_TYPE_EZMESH;
 	else if (strstr(name_ptr, "_es"))
 		fw_type = FW_TYPE_ES;
 	else if (strstr(name_ptr, "_mfg"))
@@ -792,6 +798,10 @@ dhd_conf_set_fw_name_by_chip(dhd_pub_t *dhd, char *fw_path)
 		fw_type = FW_TYPE_MINIME;
 	else
 		fw_type = FW_TYPE_STA;
+#ifdef WLEASYMESH
+	if (dhd->conf->fw_type == FW_TYPE_EZMESH)
+		fw_type = FW_TYPE_EZMESH;
+#endif /* WLEASYMESH */
 
 	row_chip = dhd_conf_match_chip(dhd, ag_type);
 	if (row_chip && strlen(row_chip->chip_name)) {
@@ -806,6 +816,8 @@ dhd_conf_set_fw_name_by_chip(dhd_pub_t *dhd, char *fw_path)
 			strcat(name_ptr, "_p2p.bin");
 		else if (fw_type == FW_TYPE_MESH)
 			strcat(name_ptr, "_mesh.bin");
+		else if (fw_type == FW_TYPE_EZMESH)
+			strcat(name_ptr, "_ezmesh.bin");
 		else if (fw_type == FW_TYPE_ES)
 			strcat(name_ptr, "_es.bin");
 		else if (fw_type == FW_TYPE_MFG)
@@ -830,6 +842,8 @@ dhd_conf_set_fw_name_by_chip(dhd_pub_t *dhd, char *fw_path)
 			strcat(name_ptr, "_p2p.bin");
 		else if (fw_type == FW_TYPE_MESH)
 			strcat(name_ptr, "_mesh.bin");
+		else if (fw_type == FW_TYPE_EZMESH)
+			strcat(name_ptr, "_ezmesh.bin");
 		else if (fw_type == FW_TYPE_ES)
 			strcat(name_ptr, "_es.bin");
 		else if (fw_type == FW_TYPE_MFG)
@@ -1296,6 +1310,38 @@ dhd_conf_set_bufiovar(dhd_pub_t *dhd, int ifidx, uint cmd, char *name,
 	return ret;
 }
 
+static int
+dhd_conf_iovar_buf(dhd_pub_t *dhd, int ifidx, int cmd, char *name,
+	char *buf, int len)
+{
+	char iovbuf[WLC_IOCTL_MEDLEN];
+	int ret = -1;
+	s32 iovar_len;
+
+	if (cmd == WLC_GET_VAR) {
+		if (bcm_mkiovar(name, buf, len, iovbuf, sizeof(iovbuf))) {
+			ret = dhd_wl_ioctl_cmd(dhd, cmd, iovbuf, sizeof(iovbuf), FALSE, ifidx);
+			if (!ret) {
+				memcpy(buf, iovbuf, len);
+			} else {
+				CONFIG_ERROR("get iovar %s failed %d\n", name, ret);
+			}
+		} else {
+			CONFIG_ERROR("mkiovar %s failed\n", name);
+		}
+	} else if (cmd == WLC_SET_VAR) {
+		iovar_len = bcm_mkiovar(name, buf, len, iovbuf, sizeof(iovbuf));
+		if (iovar_len > 0)
+			ret = dhd_wl_ioctl_cmd(dhd, cmd, iovbuf, iovar_len, TRUE, ifidx);
+		else
+			ret = BCME_BUFTOOSHORT;
+		if (ret < 0)
+			CONFIG_ERROR("%s setting failed %d, len=%d\n", name, ret, len);
+	}
+
+	return ret;
+}
+
 int
 dhd_conf_get_iovar(dhd_pub_t *dhd, int ifidx, int cmd, char *name,
 	char *buf, int len)
@@ -1324,18 +1370,79 @@ dhd_conf_get_iovar(dhd_pub_t *dhd, int ifidx, int cmd, char *name,
 }
 
 static int
-dhd_conf_rsdb_mode(dhd_pub_t *dhd, char *buf)
+dhd_conf_rsdb_mode(dhd_pub_t *dhd, char *cmd, char *buf)
 {
 	wl_config_t rsdb_mode_cfg = {1, 0};
 
 	if (buf) {
 		rsdb_mode_cfg.config = (int)simple_strtol(buf, NULL, 0);
 		CONFIG_MSG("rsdb_mode %d\n", rsdb_mode_cfg.config);
-		dhd_conf_set_bufiovar(dhd, 0, WLC_SET_VAR, "rsdb_mode", (char *)&rsdb_mode_cfg,
+		dhd_conf_set_bufiovar(dhd, 0, WLC_SET_VAR, cmd, (char *)&rsdb_mode_cfg,
 			sizeof(rsdb_mode_cfg), TRUE);
 	}
 
 	return 0;
+}
+
+int
+dhd_conf_reg2args(dhd_pub_t *dhd, char *cmd, bool set, uint32 index, uint32 *val)
+{
+	char var[WLC_IOCTL_SMLEN];
+	uint32 int_val, len;
+	void *ptr = NULL;
+	int ret = 0;
+
+	len = sizeof(int_val);
+	int_val = htod32(index);
+	memset(var, 0, sizeof(var));
+	memcpy(var, (char *)&int_val, sizeof(int_val));
+
+	if (set) {
+		int_val = htod32(*val);
+		memcpy(&var[len], (char *)&int_val, sizeof(int_val));
+		len += sizeof(int_val);
+		dhd_conf_iovar_buf(dhd, 0, WLC_SET_VAR, cmd, var, sizeof(var));
+	} else {
+		ret = dhd_conf_iovar_buf(dhd, 0, WLC_GET_VAR, cmd, var, sizeof(var));
+		if (ret < 0)
+			return ret;
+		ptr = var;
+		*val = dtoh32(*(int *)ptr);
+	}
+
+	return ret;
+}
+
+static int
+dhd_conf_btc_params(dhd_pub_t *dhd, char *cmd, char *buf)
+{
+	int ret = BCME_OK;
+	uint32 cur_val;
+	int index, mask, value;
+	// btc_params=[index] [mask] [value]
+	// Ex: btc_params=82 0x0021 0x0001
+
+	if (buf) {
+		sscanf(buf, "%d %x %x", &index, &mask, &value);
+	}
+
+	CONFIG_TRACE("%s%d mask=0x%04x value=0x%04x\n", cmd, index, mask, value);
+
+	ret = dhd_conf_reg2args(dhd, cmd, FALSE, index, &cur_val);
+	CONFIG_TRACE("%s%d = 0x%04x\n", cmd, index, cur_val);
+	cur_val &= (~mask);
+	cur_val |= value;
+
+	// need to WLC_UP before btc_params
+	dhd_conf_set_intiovar(dhd, WLC_UP, "WLC_UP", 0, 0, FALSE);
+
+	CONFIG_TRACE("wl %s%d 0x%04x\n", cmd, index, cur_val);
+	ret = dhd_conf_reg2args(dhd, cmd, TRUE, index, &cur_val);
+
+	ret = dhd_conf_reg2args(dhd, cmd, FALSE, index, &cur_val);
+	CONFIG_MSG("%s%d = 0x%04x\n", cmd, index, cur_val);
+
+	return ret;
 }
 
 typedef struct sub_cmd_t {
@@ -1382,7 +1489,7 @@ wl_he_iovt2len(uint iovt)
 }
 
 static int
-dhd_conf_he_cmd(dhd_pub_t * dhd, char *buf)
+dhd_conf_he_cmd(dhd_pub_t * dhd, char *cmd, char *buf)
 {
 	int ret = BCME_OK, i;
 	bcm_xtlv_t *pxtlv = NULL;
@@ -1419,14 +1526,57 @@ dhd_conf_he_cmd(dhd_pub_t * dhd, char *buf)
 			return 0;
 		}
 		CONFIG_TRACE("he %s 0x%x\n", sub_cmd, he_val);
-		dhd_conf_set_bufiovar(dhd, 0, WLC_SET_VAR, "he", (char *)&mybuf,
+		dhd_conf_set_bufiovar(dhd, 0, WLC_SET_VAR, cmd, (char *)&mybuf,
 			sizeof(mybuf), TRUE);
 	}
 
 	return 0;
 }
 
-typedef int (tpl_parse_t)(dhd_pub_t *dhd, char *buf);
+#ifndef SUPPORT_RANDOM_MAC_SCAN
+int
+dhd_conf_scan_mac(dhd_pub_t * dhd, char *cmd, char *buf)
+{
+	uint8 buffer[WLC_IOCTL_SMLEN] = {0, };
+	wl_scanmac_t *sm = NULL;
+	wl_scanmac_enable_t *sm_enable = NULL;
+	int enable = 0, len = 0, ret = -1;
+	char sub_cmd[32], iovbuf[WLC_IOCTL_SMLEN];
+	s32 iovar_len;
+
+	memset(sub_cmd, 0, sizeof(sub_cmd));
+	if (buf) {
+		sscanf(buf, "%s %d", sub_cmd, &enable);
+	}
+
+	if (!strcmp(sub_cmd, "enable")) {
+		sm = (wl_scanmac_t *)buffer;
+		sm_enable = (wl_scanmac_enable_t *)sm->data;
+		sm->len = sizeof(*sm_enable);
+		sm_enable->enable = enable;
+		len = OFFSETOF(wl_scanmac_t, data) + sm->len;
+		sm->subcmd_id = WL_SCANMAC_SUBCMD_ENABLE;
+		CONFIG_TRACE("scanmac enable %d\n", sm_enable->enable);
+
+		iovar_len = bcm_mkiovar("scanmac", buffer, len, iovbuf, sizeof(iovbuf));
+		if (iovar_len > 0)
+			ret = dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf, iovar_len, TRUE, 0);
+		else
+			ret = BCME_BUFTOOSHORT;
+		if (ret == BCME_UNSUPPORTED)
+			CONFIG_TRACE("scanmac, UNSUPPORTED\n");
+		else if (ret != BCME_OK)
+			CONFIG_ERROR("%s setting failed %d, len=%d\n", "scanmac", ret, len);
+	}
+	else {
+		CONFIG_ERROR("wrong cmd \"%s %d\"\n", sub_cmd, enable);
+	}
+
+	return 0;
+}
+#endif
+
+typedef int (tpl_parse_t)(dhd_pub_t *dhd, char *name, char *buf);
 
 typedef struct iovar_tpl_t {
 	int cmd;
@@ -1437,6 +1587,10 @@ typedef struct iovar_tpl_t {
 const iovar_tpl_t iovar_tpl_list[] = {
 	{WLC_SET_VAR,	"rsdb_mode",	dhd_conf_rsdb_mode},
 	{WLC_SET_VAR,	"he",		dhd_conf_he_cmd},
+	{WLC_SET_VAR,	"btc_params",	dhd_conf_btc_params},
+#ifndef SUPPORT_RANDOM_MAC_SCAN
+	{WLC_SET_VAR,	"scanmac",		dhd_conf_scan_mac},
+#endif
 };
 
 static int iovar_tpl_parse(const iovar_tpl_t *tpl, int tpl_count,
@@ -1450,7 +1604,7 @@ static int iovar_tpl_parse(const iovar_tpl_t *tpl, int tpl_count,
 			break;
 	}
 	if (i < tpl_count && tpl->parse) {
-		ret = tpl->parse(dhd, buf);
+		ret = tpl->parse(dhd, name, buf);
 	} else {
 		ret = -1;
 	}
@@ -4346,11 +4500,16 @@ dhd_conf_postinit_ioctls(dhd_pub_t *dhd)
 		dhd_conf_set_wl_cmd(dhd, he_cmd, TRUE);
 	}
 #if defined(WLEASYMESH)
-	if (conf->chip == BCM4359_CHIP_ID) {
-		char ezmesh[] = "mbss=1, rsdb_mode=0";
-		dhd_conf_set_wl_cmd(dhd, ezmesh, TRUE);
+	if (conf->fw_type == FW_TYPE_EZMESH) {
+		if (conf->chip == BCM4359_CHIP_ID) {
+			char ezmesh[] = "mbss=1, rsdb_mode=0";
+			dhd_conf_set_wl_cmd(dhd, ezmesh, TRUE);
+		} else {
+			char ezmesh[] = "mbss=1";
+			dhd_conf_set_wl_cmd(dhd, ezmesh, TRUE);
+		}
 	}
-#endif
+#endif /* WLEASYMESH */
 #if defined(BCMSDIO)
 	if (conf->devid == BCM43751_CHIP_ID)
 #elif defined(BCMPCIE)
@@ -4364,6 +4523,12 @@ dhd_conf_postinit_ioctls(dhd_pub_t *dhd)
 	}
 #ifdef UPDATE_MODULE_NAME
 	dhd_conf_compat_func(dhd);
+#endif
+#ifndef SUPPORT_RANDOM_MAC_SCAN
+	{
+		char scanmac[] = "scanmac=enable 0";
+		dhd_conf_set_wl_cmd(dhd, scanmac, TRUE);
+	}
 #endif
 	dhd_conf_set_wl_cmd(dhd, conf->wl_preinit, TRUE);
 
@@ -4457,7 +4622,7 @@ dhd_conf_preinit(dhd_pub_t *dhd)
 	conf->tx_max_offset = 0;
 	conf->txglomsize = SDPCM_DEFGLOM_SIZE;
 	conf->txctl_tmo_fix = 300;
-	conf->txglom_mode = SDPCM_TXGLOM_MDESC;
+	conf->txglom_mode = SDPCM_TXGLOM_CPY;
 	conf->deferred_tx_len = 0;
 	conf->dhd_txminmax = 1;
 	conf->txinrx_thres = -1;
@@ -4528,7 +4693,8 @@ dhd_conf_preinit(dhd_pub_t *dhd)
 #endif
 	conf->pktprio8021x = -1;
 	conf->ctrl_resched = 2;
-	conf->in4way = STA_NO_SCAN_IN4WAY | STA_WAIT_DISCONNECTED | AP_WAIT_STA_RECONNECT;
+	conf->in4way = STA_NO_SCAN_IN4WAY | STA_WAIT_DISCONNECTED |
+		STA_START_AUTH_DELAY | AP_WAIT_STA_RECONNECT;
 #ifdef PROPTX_MAXCOUNT
 	conf->proptx_maxcnt_2g = 46;
 	conf->proptx_maxcnt_5g = WL_TXSTATUS_FREERUNCTR_MASK;
