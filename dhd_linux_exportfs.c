@@ -561,7 +561,7 @@ static struct dhd_attr dhd_attr_cntl_macaddr =
 
 #ifdef DHD_FW_COREDUMP
 
-#define MEMDUMPINFO "/data/misc/wifi/.memdump.info"
+#define MEMDUMPINFO "/data/vendor/misc/wifi/.memdump.info"
 
 uint32
 get_mem_val_from_file(void)
@@ -677,7 +677,7 @@ static struct dhd_attr dhd_attr_cntl_memdump =
 #endif /* DHD_FW_COREDUMP */
 
 #ifdef BCMASSERT_LOG
-#define ASSERTINFO "/data/misc/wifi/.assert.info"
+#define ASSERTINFO "/data/vendor/misc/wifi/.assert.info"
 int
 get_assert_val_from_file(void)
 {
@@ -1353,7 +1353,7 @@ static ssize_t read_csi_data(struct file *filp, struct kobject *kobj,
 }
 
 static struct bin_attribute dhd_attr_csi = {
-	.attr = { .name = "csi",
+	.attr = { .name = "csi" BUS_TYPE,
 		  .mode = 0660, },
 	.size = MAX_CSI_FILESZ,
 	.read = read_csi_data,
@@ -1371,13 +1371,13 @@ int dhd_sysfs_init(dhd_info_t *dhd)
 	}
 
 	/* Initialize the kobject */
-	ret = kobject_init_and_add(&dhd->dhd_kobj, &dhd_ktype, NULL, "bcm-dhd");
+	ret = kobject_init_and_add(&dhd->dhd_kobj, &dhd_ktype, NULL, "bcm-dhd" BUS_TYPE);
 	if (ret) {
 		kobject_put(&dhd->dhd_kobj);
 		DHD_ERROR(("%s(): Unable to allocate kobject \r\n", __FUNCTION__));
 		return ret;
 	}
-	ret = kobject_init_and_add(&dhd->dhd_conf_file_kobj, &dhd_cntl_file_ktype, NULL, "wifi");
+	ret = kobject_init_and_add(&dhd->dhd_conf_file_kobj, &dhd_cntl_file_ktype, NULL, "wifi" BUS_TYPE);
 	if (ret) {
 		kobject_put(&dhd->dhd_conf_file_kobj);
 		DHD_ERROR(("%s(): Unable to allocate kobject \r\n", __FUNCTION__));

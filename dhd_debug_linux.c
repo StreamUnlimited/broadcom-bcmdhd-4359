@@ -348,7 +348,7 @@ dhd_os_push_push_ring_data(dhd_pub_t *dhdp, int ring_id, void *data, int32 data_
 		msg_hdr.type = DBG_RING_ENTRY_EVENT_TYPE;
 		msg_hdr.flags |= DBG_RING_ENTRY_FLAGS_HAS_TIMESTAMP;
 		msg_hdr.flags |= DBG_RING_ENTRY_FLAGS_HAS_BINARY;
-		msg_hdr.timestamp = local_clock();
+		msg_hdr.timestamp = osl_localtime_ns();
 		/* convert to ms */
 		msg_hdr.timestamp = DIV_U64_BY_U32(msg_hdr.timestamp, NSEC_PER_MSEC);
 		msg_hdr.len = data_len;
@@ -433,11 +433,15 @@ int
 dhd_os_dbg_get_feature(dhd_pub_t *dhdp, int32 *features)
 {
 	int ret = BCME_OK;
+#ifdef DEBUGABILITY
+	struct dhd_conf *conf = dhdp->conf;
+#endif
+
 	*features = 0;
 #ifdef DEBUGABILITY
 	// fix for RequestFirmwareDebugDump issue of VTS
-	if ((dhdp->conf->chip != BCM43751_CHIP_ID) && (dhdp->conf->chip != BCM43752_CHIP_ID) &&
-			(dhdp->conf->chip != BCM4375_CHIP_ID))
+	if ((conf->chip != BCM4359_CHIP_ID) && (conf->chip != BCM43751_CHIP_ID) &&
+			(conf->chip != BCM43752_CHIP_ID) && (conf->chip != BCM4375_CHIP_ID))
 		*features |= DBG_MEMORY_DUMP_SUPPORTED;
 	if (FW_SUPPORTED(dhdp, logtrace)) {
 		*features |= DBG_CONNECT_EVENT_SUPPORTED;

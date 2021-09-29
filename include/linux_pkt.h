@@ -183,10 +183,8 @@ extern void osl_pkt_orphan_partial(struct sk_buff *skb, int tsq);
 
 #if defined(BCM_OBJECT_TRACE)
 extern void linux_pktfree(osl_t *osh, void *skb, bool send, int line, const char *caller);
-extern void linux_pktfree_irq(osl_t *osh, void *skb, bool send, int line, const char *caller);
 #else
 extern void linux_pktfree(osl_t *osh, void *skb, bool send);
-extern void linux_pktfree_irq(osl_t *osh, void *skb, bool send);
 #endif /* BCM_OBJECT_TRACE */
 extern void *osl_pktget_static(osl_t *osh, uint len);
 extern void osl_pktfree_static(osl_t *osh, void *skb, bool send);

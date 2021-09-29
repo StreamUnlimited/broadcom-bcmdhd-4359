@@ -1004,6 +1004,7 @@ dhdpcie_os_chkbpoffset(dhdpcie_info_t *pch, ulong offset)
 	/* Determine BAR1 backplane window using window size
 	 * Window address mask should be ~(size - 1)
 	 */
+#ifndef DHD_BAR1_WINDOW_LESS_THAN_4MB
 	uint32 bpwin = (uint32)(offset & ~(pch->bar1_size - 1));
 
 	if (bpwin != pch->curr_bar1_win) {
@@ -1012,6 +1013,9 @@ dhdpcie_os_chkbpoffset(dhdpcie_info_t *pch, ulong offset)
 	}
 
 	return offset - bpwin;
+#else
+	return offset;
+#endif
 }
 
 /**
@@ -1583,6 +1587,16 @@ int dhdpcie_get_resource(dhdpcie_info_t *dhdpcie_info)
 	phys_addr_t  bar0_addr, bar1_addr;
 	ulong bar1_size;
 	struct pci_dev *pdev = NULL;
+#ifdef DHD_BAR1_WINDOW_LESS_THAN_4MB
+	ulong bar0_size;
+	unsigned short rbarctrl = 0;
+	unsigned short rbarctrln = 0;
+
+	rbarctrl = OSL_PCI_READ_CONFIG(dhdpcie_info->osh, 0x228, sizeof(uint32));
+	osl_pci_write_config(dhdpcie_info->osh, 0x228, 4, ((rbarctrl & 0xff) | 0x100));
+	rbarctrln = OSL_PCI_READ_CONFIG(dhdpcie_info->osh, 0x228, sizeof(uint32));
+	printf("%s: change 0x228, rbarctrl=%x->%x\n", __FUNCTION__, rbarctrl, rbarctrln);
+#endif
 	pdev = dhdpcie_info->dev;
 #ifdef EXYNOS_PCIE_MODULE_PATCH
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0))
@@ -1603,6 +1617,10 @@ int dhdpcie_get_resource(dhdpcie_info_t *dhdpcie_info)
 
 		/* read Bar-1 mapped memory range */
 		bar1_size = pci_resource_len(pdev, 2);
+#ifdef DHD_BAR1_WINDOW_LESS_THAN_4MB
+		bar0_size = pci_resource_len(pdev, 0);
+		printf("%s: bar0_size = %lu, bar1_size = %lu\n", __FUNCTION__, bar0_size, bar1_size);
+#endif
 
 		if ((bar1_size == 0) || (bar1_addr == 0)) {
 			printf("%s: BAR1 Not enabled for this device  size(%ld),"
@@ -1612,8 +1630,15 @@ int dhdpcie_get_resource(dhdpcie_info_t *dhdpcie_info)
 		}
 
 		dhdpcie_info->regs = (volatile char *) REG_MAP(bar0_addr, DONGLE_REG_MAP_SIZE);
+#ifdef DHD_BAR1_WINDOW_LESS_THAN_4MB
+		/* Keep TCM size same as BAR1 size */
+		dhdpcie_info->bar1_size = bar1_size;
+#else
 		dhdpcie_info->bar1_size =
 			(bar1_size > DONGLE_TCM_MAP_SIZE) ? bar1_size : DONGLE_TCM_MAP_SIZE;
+#endif
+		DHD_ERROR(("%s: bar1_size = %ld tcm_size = %d\n",
+			__FUNCTION__, bar1_size, dhdpcie_info->bar1_size));
 		dhdpcie_info->tcm = (volatile char *) REG_MAP(bar1_addr, dhdpcie_info->bar1_size);
 
 		if (!dhdpcie_info->regs || !dhdpcie_info->tcm) {
@@ -1646,9 +1671,9 @@ int dhdpcie_get_resource(dhdpcie_info_t *dhdpcie_info)
 	}
 #endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0) */
 
-		DHD_TRACE(("%s:Phys addr : reg space = %p base addr 0x"PRINTF_RESOURCE" \n",
+		DHD_ERROR(("%s:Phys addr : reg space = %p base addr 0x"PRINTF_RESOURCE" \n",
 			__FUNCTION__, dhdpcie_info->regs, bar0_addr));
-		DHD_TRACE(("%s:Phys addr : tcm_space = %p base addr 0x"PRINTF_RESOURCE" \n",
+		DHD_ERROR(("%s:Phys addr : tcm_space = %p base addr 0x"PRINTF_RESOURCE" \n",
 			__FUNCTION__, dhdpcie_info->tcm, bar1_addr));
 
 		return 0; /* SUCCESS  */
@@ -1814,7 +1839,12 @@ int dhdpcie_init(struct pci_dev *pdev)
 		}
 
 		/* Bus initialization */
+#ifdef DHD_BAR1_WINDOW_LESS_THAN_4MB
+		ret = dhdpcie_bus_attach(osh, &bus, dhdpcie_info->regs, dhdpcie_info->tcm, pdev, adapter,
+			dhdpcie_info->bar1_size);
+#else
 		ret = dhdpcie_bus_attach(osh, &bus, dhdpcie_info->regs, dhdpcie_info->tcm, pdev, adapter);
+#endif
 		if (ret != BCME_OK) {
 			DHD_ERROR(("%s:dhdpcie_bus_attach() failed\n", __FUNCTION__));
 			break;
@@ -2237,6 +2267,15 @@ dhdpcie_alloc_resource(dhd_bus_t *bus)
 	dhdpcie_info_t *dhdpcie_info;
 	phys_addr_t bar0_addr, bar1_addr;
 	ulong bar1_size;
+#ifdef DHD_BAR1_WINDOW_LESS_THAN_4MB
+	unsigned short rbarctrl = 0;
+	unsigned short rbarctrln = 0;
+
+	rbarctrl = OSL_PCI_READ_CONFIG(bus->osh, 0x228, sizeof(uint32));
+	osl_pci_write_config(bus->osh, 0x228, 4, ((rbarctrl & 0xff) | 0x100));
+	rbarctrln = OSL_PCI_READ_CONFIG(bus->osh, 0x228, sizeof(uint32));
+	printf("%s: change 0x228, rbarctrl=%x->%x\n", __FUNCTION__, rbarctrl, rbarctrln);
+#endif
 
 	do {
 		if (bus == NULL) {
@@ -2275,8 +2314,15 @@ dhdpcie_alloc_resource(dhd_bus_t *bus)
 		}
 
 		bus->regs = dhdpcie_info->regs;
+#ifdef DHD_BAR1_WINDOW_LESS_THAN_4MB
+		/* Keep TCM size same as BAR1 size */
+		dhdpcie_info->bar1_size = bar1_size;
+#else
 		dhdpcie_info->bar1_size =
 			(bar1_size > DONGLE_TCM_MAP_SIZE) ? bar1_size : DONGLE_TCM_MAP_SIZE;
+#endif
+		DHD_ERROR(("%s: bar1_size = %ld tcm_size = %d\n",
+			__FUNCTION__, bar1_size, dhdpcie_info->bar1_size));
 		dhdpcie_info->tcm = (volatile char *) REG_MAP(bar1_addr, dhdpcie_info->bar1_size);
 		if (!dhdpcie_info->tcm) {
 			DHD_ERROR(("%s: ioremap() for regs is failed\n", __FUNCTION__));
@@ -2287,9 +2333,9 @@ dhdpcie_alloc_resource(dhd_bus_t *bus)
 
 		bus->tcm = dhdpcie_info->tcm;
 
-		DHD_TRACE(("%s:Phys addr : reg space = %p base addr 0x"PRINTF_RESOURCE" \n",
+		DHD_ERROR(("%s:Phys addr : reg space = %p base addr 0x"PRINTF_RESOURCE" \n",
 			__FUNCTION__, dhdpcie_info->regs, bar0_addr));
-		DHD_TRACE(("%s:Phys addr : tcm_space = %p base addr 0x"PRINTF_RESOURCE" \n",
+		DHD_ERROR(("%s:Phys addr : tcm_space = %p base addr 0x"PRINTF_RESOURCE" \n",
 			__FUNCTION__, dhdpcie_info->tcm, bar1_addr));
 
 		return 0;

@@ -11,21 +11,51 @@
 #endif /* defined(BUS_POWER_RESTORE) && defined(BCMSDIO) */
 
 #ifdef CONFIG_DHD_USE_STATIC_BUF
-extern void *dhd_wlan_mem_prealloc(int section, unsigned long size);
+#ifdef DHD_STATIC_IN_DRIVER
+extern int dhd_static_buf_init(void);
+extern void dhd_static_buf_exit(void);
+#endif /* DHD_STATIC_IN_DRIVER */
+#ifdef BCMDHD_MDRIVER
+extern void *bcmdhd_mem_prealloc(uint bus_type, int index,
+	int section, unsigned long size);
+#else
+extern void *bcmdhd_mem_prealloc(int section, unsigned long size);
+#endif
 #endif /* CONFIG_DHD_USE_STATIC_BUF */
 
-static int gpio_wl_reg_on = -1; // WL_REG_ON is input pin of WLAN module
-#ifdef CUSTOMER_OOB
-static int gpio_wl_host_wake = -1; // WL_HOST_WAKE is output pin of WLAN module
+#ifdef BCMDHD_DTS
+/* This is sample code in dts file.
+bcmdhd {
+	compatible = "android,bcmdhd_wlan";
+	gpio_wl_reg_on = <&gpio GPIOH_4 GPIO_ACTIVE_HIGH>;
+	gpio_wl_host_wake = <&gpio GPIOZ_15 GPIO_ACTIVE_HIGH>;
+};
+*/
+#define DHD_DT_COMPAT_ENTRY		"android,bcmdhd_wlan"
+#define GPIO_WL_REG_ON_PROPNAME		"gpio_wl_reg_on"
+#define GPIO_WL_HOST_WAKE_PROPNAME	"gpio_wl_host_wake"
+#endif
+
+#ifdef CUSTOMER_HW_AMLOGIC
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 8, 0))
+#include <linux/amlogic/aml_gpio_consumer.h>
+extern int wifi_irq_trigger_level(void);
+extern u8 *wifi_get_mac(void);
+extern u8 *wifi_get_ap_mac(void);
+#endif
+extern void sdio_reinit(void);
+extern void set_usb_bt_power(int is_power);
+extern void extern_wifi_set_enable(int is_on);
+extern void pci_remove_reinit(unsigned int vid, unsigned int pid, int delBus);
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0))
+extern int wifi_irq_num(void);
+#endif
 #endif
 
 static int
-dhd_wlan_set_power(int on
-#ifdef BUS_POWER_RESTORE
-, wifi_adapter_info_t *adapter
-#endif /* BUS_POWER_RESTORE */
-)
+dhd_wlan_set_power(int on, wifi_adapter_info_t *adapter)
 {
+	int gpio_wl_reg_on = adapter->gpio_wl_reg_on;
 	int err = 0;
 
 	if (on) {
@@ -37,13 +67,30 @@ dhd_wlan_set_power(int on
 				return -EIO;
 			}
 		}
-#if defined(BUS_POWER_RESTORE)
-#if defined(BCMSDIO) && (LINUX_VERSION_CODE < KERNEL_VERSION(4, 19, 0))
+#ifdef CUSTOMER_HW_AMLOGIC
+#ifdef BCMSDIO
+		extern_wifi_set_enable(0);
+		mdelay(200);
+		extern_wifi_set_enable(1);
+		mdelay(200);
+//		sdio_reinit();
+#endif
+#ifdef BCMDBUS
+		set_usb_bt_power(0);
+		mdelay(200);
+		set_usb_bt_power(1);
+		mdelay(200);
+#endif
+#endif
+#ifdef BUS_POWER_RESTORE
+#ifdef BCMSDIO
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 32) && LINUX_VERSION_CODE < KERNEL_VERSION(4, 19, 0)
 		if (adapter->sdio_func && adapter->sdio_func->card && adapter->sdio_func->card->host) {
 			mdelay(100);
 			printf("======== mmc_power_restore_host! ========\n");
 			mmc_power_restore_host(adapter->sdio_func->card->host);
 		}
+#endif
 #elif defined(BCMPCIE)
 		if (adapter->pci_dev) {
 			mdelay(100);
@@ -62,12 +109,14 @@ dhd_wlan_set_power(int on
 		/* Lets customer power to get stable */
 		mdelay(100);
 	} else {
-#if defined(BUS_POWER_RESTORE)
-#if defined(BCMSDIO) && (LINUX_VERSION_CODE < KERNEL_VERSION(4, 19, 0))
+#ifdef BUS_POWER_RESTORE
+#ifdef BCMSDIO
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 32) && LINUX_VERSION_CODE < KERNEL_VERSION(4, 19, 0)
 		if (adapter->sdio_func && adapter->sdio_func->card && adapter->sdio_func->card->host) {
 			printf("======== mmc_power_save_host! ========\n");
 			mmc_power_save_host(adapter->sdio_func->card->host);
 		}
+#endif
 #elif defined(BCMPCIE)
 		if (adapter->pci_dev) {
 			printf("======== pci_set_power_state PCI_D3hot! ========\n");
@@ -87,6 +136,16 @@ dhd_wlan_set_power(int on
 				return -EIO;
 			}
 		}
+#ifdef CUSTOMER_HW_AMLOGIC
+#ifdef BCMSDIO
+		extern_wifi_set_enable(0);
+		mdelay(200);
+#endif
+#ifdef BCMDBUS
+		set_usb_bt_power(0);
+		mdelay(200);
+#endif
+#endif
 	}
 
 	return err;
@@ -108,6 +167,9 @@ static int dhd_wlan_set_carddetect(int present)
 #ifdef CUSTOMER_HW_PLATFORM
 		err = sdhci_force_presence_change(&sdmmc_channel, 1);
 #endif /* CUSTOMER_HW_PLATFORM */
+#ifdef CUSTOMER_HW_AMLOGIC
+		sdio_reinit();
+#endif
 #elif defined(BCMPCIE)
 		printf("======== Card detection to detect PCIE card! ========\n");
 #endif
@@ -117,8 +179,16 @@ static int dhd_wlan_set_carddetect(int present)
 #ifdef CUSTOMER_HW_PLATFORM
 		err = sdhci_force_presence_change(&sdmmc_channel, 0);
 #endif /* CUSTOMER_HW_PLATFORM */
+#ifdef CUSTOMER_HW_AMLOGIC
+		extern_wifi_set_enable(0);
+		mdelay(200);
+#endif
 #elif defined(BCMPCIE)
 		printf("======== Card detection to remove PCIE card! ========\n");
+#ifdef CUSTOMER_HW_AMLOGIC
+		extern_wifi_set_enable(0);
+		mdelay(200);
+#endif
 #endif
 	}
 #endif /* BUS_POWER_RESTORE */
@@ -126,27 +196,44 @@ static int dhd_wlan_set_carddetect(int present)
 	return err;
 }
 
-static int dhd_wlan_get_mac_addr(unsigned char *buf
-#ifdef CUSTOM_MULTI_MAC
-	, char *name
-#endif
-)
+static int dhd_wlan_get_mac_addr(unsigned char *buf, int ifidx)
 {
 	int err = 0;
 
-#ifdef CUSTOM_MULTI_MAC
-	if (!strcmp("wlan1", name)) {
+	if (ifidx == 1) {
 #ifdef EXAMPLE_GET_MAC
 		struct ether_addr ea_example = {{0x00, 0x11, 0x22, 0x33, 0x44, 0xFF}};
 		bcopy((char *)&ea_example, buf, sizeof(struct ether_addr));
 #endif /* EXAMPLE_GET_MAC */
-	} else
-#endif /* CUSTOM_MULTI_MAC */
-	{
+#ifdef CUSTOMER_HW_AMLOGIC
+#ifdef CUSTOM_AP_MAC
+		bcopy((char *)wifi_get_ap_mac(), buf, sizeof(struct ether_addr));
+		if (buf[0] == 0xff) {
+			printf("custom wifi ap mac is not set\n");
+			err = -1;
+		} else
+			printf("custom wifi ap mac-addr: %02x:%02x:%02x:%02x:%02x:%02x\n",
+				buf[0], buf[1], buf[2],
+				buf[3], buf[4], buf[5]);
+#else
+		err = -1;
+#endif
+#endif
+	} else {
 #ifdef EXAMPLE_GET_MAC
 		struct ether_addr ea_example = {{0x02, 0x11, 0x22, 0x33, 0x44, 0x55}};
 		bcopy((char *)&ea_example, buf, sizeof(struct ether_addr));
 #endif /* EXAMPLE_GET_MAC */
+#ifdef CUSTOMER_HW_AMLOGIC
+		bcopy((char *)wifi_get_mac(), buf, sizeof(struct ether_addr));
+		if (buf[0] == 0xff) {
+			printf("custom wifi mac is not set\n");
+			err = -1;
+		} else
+			printf("custom wifi mac-addr: %02x:%02x:%02x:%02x:%02x:%02x\n",
+				buf[0], buf[1], buf[2],
+				buf[3], buf[4], buf[5]);
+#endif
 	}
 
 #ifdef EXAMPLE_GET_MAC_VER2
@@ -217,31 +304,27 @@ static void *dhd_wlan_get_country_code(char *ccode
 	return NULL;
 }
 
-struct resource dhd_wlan_resources[] = {
-	[0] = {
-		.name	= "bcmdhd_wlan_irq",
-		.start	= 0, /* Dummy */
-		.end	= 0, /* Dummy */
-		.flags	= IORESOURCE_IRQ | IORESOURCE_IRQ_SHAREABLE
-			| IORESOURCE_IRQ_HIGHLEVEL, /* Dummy */
-	},
-};
-
 struct wifi_platform_data dhd_wlan_control = {
 	.set_power	= dhd_wlan_set_power,
 	.set_reset	= dhd_wlan_set_reset,
 	.set_carddetect	= dhd_wlan_set_carddetect,
 	.get_mac_addr	= dhd_wlan_get_mac_addr,
 #ifdef CONFIG_DHD_USE_STATIC_BUF
-	.mem_prealloc	= dhd_wlan_mem_prealloc,
+	.mem_prealloc	= bcmdhd_mem_prealloc,
 #endif /* CONFIG_DHD_USE_STATIC_BUF */
 	.get_country_code = dhd_wlan_get_country_code,
 };
 
-int dhd_wlan_init_gpio(void)
+int dhd_wlan_init_gpio(wifi_adapter_info_t *adapter)
 {
+#ifdef BCMDHD_DTS
+	char wlan_node[32];
+	struct device_node *root_node = NULL;
+#endif
 	int err = 0;
+	int gpio_wl_reg_on;
 #ifdef CUSTOMER_OOB
+	int gpio_wl_host_wake;
 	int host_oob_irq = -1;
 	uint host_oob_irq_flags = 0;
 #endif
@@ -249,9 +332,29 @@ int dhd_wlan_init_gpio(void)
 	/* Please check your schematic and fill right GPIO number which connected to
 	* WL_REG_ON and WL_HOST_WAKE.
 	*/
-	gpio_wl_reg_on = -1;
+#ifdef BCMDHD_DTS
+	strcpy(wlan_node, DHD_DT_COMPAT_ENTRY);
+	printf("======== Get GPIO from DTS(%s) ========\n", wlan_node);
+	root_node = of_find_compatible_node(NULL, NULL, wlan_node);
+	if (root_node) {
+		gpio_wl_reg_on = of_get_named_gpio(root_node, GPIO_WL_REG_ON_PROPNAME, 0);
 #ifdef CUSTOMER_OOB
-	gpio_wl_host_wake = -1;
+		gpio_wl_host_wake = of_get_named_gpio(root_node, GPIO_WL_HOST_WAKE_PROPNAME, 0);
+#endif
+	} else
+#endif
+	{
+		gpio_wl_reg_on = -1;
+#ifdef CUSTOMER_OOB
+		gpio_wl_host_wake = -1;
+#endif
+	}
+
+#ifdef CUSTOMER_HW_AMLOGIC
+#if defined(BCMPCIE)
+	printf("======== Card detection to detect PCIE card! ========\n");
+//	pci_remove_reinit(0x14e4, 0x43ec, 1);
+#endif
 #endif
 
 	if (gpio_wl_reg_on >= 0) {
@@ -262,6 +365,7 @@ int dhd_wlan_init_gpio(void)
 			gpio_wl_reg_on = -1;
 		}
 	}
+	adapter->gpio_wl_reg_on = gpio_wl_reg_on;
 
 #ifdef CUSTOMER_OOB
 	if (gpio_wl_host_wake >= 0) {
@@ -271,6 +375,7 @@ int dhd_wlan_init_gpio(void)
 				__FUNCTION__, gpio_wl_host_wake);
 			return -1;
 		}
+		adapter->gpio_wl_host_wake = gpio_wl_host_wake;
 		err = gpio_direction_input(gpio_wl_host_wake);
 		if (err < 0) {
 			printf("%s: gpio_direction_input(%d) for WL_HOST_WAKE failed\n",
@@ -286,19 +391,34 @@ int dhd_wlan_init_gpio(void)
 			return -1;
 		}
 	}
+#ifdef CUSTOMER_HW_AMLOGIC
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0))
+	host_oob_irq = INT_GPIO_4;
+#else
+	host_oob_irq = wifi_irq_num();
+#endif
+#endif
 
 #ifdef HW_OOB
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 8, 0))
+	if (wifi_irq_trigger_level() == GPIO_IRQ_LOW)
+		host_oob_irq_flags = IORESOURCE_IRQ | IORESOURCE_IRQ_LOWLEVEL | IORESOURCE_IRQ_SHAREABLE;
+	else
+		host_oob_irq_flags = IORESOURCE_IRQ | IORESOURCE_IRQ_HIGHLEVEL | IORESOURCE_IRQ_SHAREABLE;
+#else
 #ifdef HW_OOB_LOW_LEVEL
 	host_oob_irq_flags = IORESOURCE_IRQ | IORESOURCE_IRQ_LOWLEVEL | IORESOURCE_IRQ_SHAREABLE;
 #else
 	host_oob_irq_flags = IORESOURCE_IRQ | IORESOURCE_IRQ_HIGHLEVEL | IORESOURCE_IRQ_SHAREABLE;
 #endif
+#endif
 #else
 	host_oob_irq_flags = IORESOURCE_IRQ | IORESOURCE_IRQ_HIGHEDGE | IORESOURCE_IRQ_SHAREABLE;
 #endif
+	host_oob_irq_flags &= IRQF_TRIGGER_MASK;
 
-	dhd_wlan_resources[0].start = dhd_wlan_resources[0].end = host_oob_irq;
-	dhd_wlan_resources[0].flags = host_oob_irq_flags;
+	adapter->irq_num = host_oob_irq;
+	adapter->intr_flags = host_oob_irq_flags;
 	printf("%s: WL_HOST_WAKE=%d, oob_irq=%d, oob_irq_flags=0x%x\n", __FUNCTION__,
 		gpio_wl_host_wake, host_oob_irq, host_oob_irq_flags);
 #endif /* CUSTOMER_OOB */
@@ -307,8 +427,13 @@ int dhd_wlan_init_gpio(void)
 	return 0;
 }
 
-static void dhd_wlan_deinit_gpio(void)
+static void dhd_wlan_deinit_gpio(wifi_adapter_info_t *adapter)
 {
+	int gpio_wl_reg_on = adapter->gpio_wl_reg_on;
+#ifdef CUSTOMER_OOB
+	int gpio_wl_host_wake = adapter->gpio_wl_host_wake;
+#endif
+
 	if (gpio_wl_reg_on >= 0) {
 		printf("%s: gpio_free(WL_REG_ON %d)\n", __FUNCTION__, gpio_wl_reg_on);
 		gpio_free(gpio_wl_reg_on);
@@ -323,18 +448,28 @@ static void dhd_wlan_deinit_gpio(void)
 #endif /* CUSTOMER_OOB */
 }
 
-int dhd_wlan_init_plat_data(void)
+int dhd_wlan_init_plat_data(wifi_adapter_info_t *adapter)
 {
 	int err = 0;
 
 	printf("======== %s ========\n", __FUNCTION__);
-	err = dhd_wlan_init_gpio();
+	if (adapter->index == -1) {
+		adapter->index = 0;
+	}
+	err = dhd_wlan_init_gpio(adapter);
+
+#ifdef DHD_STATIC_IN_DRIVER
+	dhd_static_buf_init();
+#endif
 	return err;
 }
 
 void dhd_wlan_deinit_plat_data(wifi_adapter_info_t *adapter)
 {
 	printf("======== %s ========\n", __FUNCTION__);
-	dhd_wlan_deinit_gpio();
+#ifdef DHD_STATIC_IN_DRIVER
+	dhd_static_buf_exit();
+#endif
+	dhd_wlan_deinit_gpio(adapter);
 }
 

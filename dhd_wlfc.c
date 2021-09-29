@@ -1832,7 +1832,7 @@ _dhd_wlfc_mac_entry_update(athost_wl_status_info_t* ctx, wlfc_mac_descriptor_t* 
 		if (action == eWLFC_MAC_ENTRY_ACTION_ADD) {
 			entry->suppressed = FALSE;
 			entry->transit_count = 0;
-#ifdef PROPTX_MAXCOUNT
+#if defined(WL_EXT_IAPSTA) && defined(PROPTX_MAXCOUNT)
 			entry->transit_maxcount = wl_ext_get_wlfc_maxcount(ctx->dhdp, ifid);
 #endif /* PROPTX_MAXCOUNT */
 			entry->suppr_transit_count = 0;

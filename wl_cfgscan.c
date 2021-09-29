@@ -993,9 +993,12 @@ wl_cfgscan_populate_scan_ssids(struct bcm_cfg80211 *cfg, u8 *buf_ptr, u32 buf_le
 }
 
 static s32
-wl_scan_prep(struct bcm_cfg80211 *cfg, void *scan_params, u32 len,
+wl_scan_prep(struct bcm_cfg80211 *cfg, struct net_device *ndev, void *scan_params, u32 len,
 	struct cfg80211_scan_request *request)
 {
+#ifdef SCAN_SUPPRESS
+	u32 channel;
+#endif
 	wl_scan_params_t *params = NULL;
 	wl_scan_params_v2_t *params_v2 = NULL;
 	u32 scan_type = 0;
@@ -1072,11 +1075,25 @@ wl_scan_prep(struct bcm_cfg80211 *cfg, void *scan_params, u32 len,
 
 	cur_offset = channel_offset;
 	/* Copy channel array if applicable */
-	if ((request->n_channels > 0) && chan_list) {
-		if (len >= (scan_param_size + (request->n_channels * sizeof(u16)))) {
-			wl_cfgscan_populate_scan_channels(cfg,
-					chan_list, request, &n_channels);
-			cur_offset += (n_channels * (sizeof(u16)));
+#ifdef SCAN_SUPPRESS
+	channel = wl_ext_scan_suppress(ndev, scan_params, cfg->scan_params_v2);
+	if (channel) {
+		n_channels = 1;
+		if ((n_channels > 0) && chan_list) {
+			if (len >= (scan_param_size + (n_channels * sizeof(u16)))) {
+				wl_ext_populate_scan_channel(cfg->pub, chan_list, channel, n_channels);
+				cur_offset += (n_channels * (sizeof(u16)));
+			}
+		}
+	} else
+#endif
+	{
+		if ((request->n_channels > 0) && chan_list) {
+			if (len >= (scan_param_size + (request->n_channels * sizeof(u16)))) {
+				wl_cfgscan_populate_scan_channels(cfg,
+						chan_list, request, &n_channels);
+				cur_offset += (n_channels * (sizeof(u16)));
+			}
 		}
 	}
 
@@ -1266,7 +1283,7 @@ wl_run_escan(struct bcm_cfg80211 *cfg, struct net_device *ndev,
 			eparams->sync_id = sync_id;
 		}
 
-		if (wl_scan_prep(cfg, scan_params, params_size, request) < 0) {
+		if (wl_scan_prep(cfg, ndev, scan_params, params_size, request) < 0) {
 			WL_ERR(("scan_prep failed\n"));
 			err = -EINVAL;
 			goto exit;
@@ -1536,7 +1553,7 @@ wl_cfgscan_handle_scanbusy(struct bcm_cfg80211 *cfg, struct net_device *ndev, s3
 		return scanbusy_err;
 	}
 	if (err == BCME_BUSY || err == BCME_NOTREADY) {
-		WL_ERR(("Scan err = (%d), busy?%d", err, -EBUSY));
+		WL_ERR(("Scan err = (%d), busy?%d\n", err, -EBUSY));
 		scanbusy_err = -EBUSY;
 	} else if ((err == BCME_EPERM) && cfg->scan_suppressed) {
 		WL_ERR(("Scan not permitted due to scan suppress\n"));
@@ -1589,7 +1606,7 @@ wl_cfgscan_handle_scanbusy(struct bcm_cfg80211 *cfg, struct net_device *ndev, s3
 			bzero(&bssid, sizeof(bssid));
 			if ((ret = wldev_ioctl_get(ndev, WLC_GET_BSSID,
 				&bssid, ETHER_ADDR_LEN)) == 0) {
-				WL_ERR(("FW is connected with " MACDBG "/n",
+				WL_ERR(("FW is connected with " MACDBG "\n",
 					MAC2STRDBG(bssid.octet)));
 			} else {
 				WL_ERR(("GET BSSID failed with %d\n", ret));
@@ -1890,10 +1907,14 @@ wl_cfg80211_scan(struct wiphy *wiphy, struct net_device *ndev,
 			 return -ENODEV;
 		}
 	}
+#ifdef WL_EXT_IAPSTA
 	err = wl_ext_in4way_sync(ndev_to_wlc_ndev(ndev, cfg), STA_NO_SCAN_IN4WAY,
 		WL_EXT_STATUS_SCAN, NULL);
-	if (err)
+	if (err) {
+		WL_SCAN(("scan suppressed %d\n", err));
 		return err;
+	}
+#endif
 
 	err = __wl_cfg80211_scan(wiphy, ndev, request, NULL);
 	if (unlikely(err)) {

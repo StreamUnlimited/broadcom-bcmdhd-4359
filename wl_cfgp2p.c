@@ -69,7 +69,7 @@ static s32 wl_cfgp2p_cancel_listen(struct bcm_cfg80211 *cfg, struct net_device *
 	struct wireless_dev *wdev, bool notify);
 
 #if defined(WL_ENABLE_P2P_IF)
-static int wl_cfgp2p_start_xmit(struct sk_buff *skb, struct net_device *ndev);
+static netdev_tx_t wl_cfgp2p_start_xmit(struct sk_buff *skb, struct net_device *ndev);
 static int wl_cfgp2p_do_ioctl(struct net_device *net, struct ifreq *ifr, int cmd);
 static int wl_cfgp2p_if_open(struct net_device *net);
 static int wl_cfgp2p_if_stop(struct net_device *net);
@@ -1112,9 +1112,9 @@ wl_cfgp2p_escan(struct bcm_cfg80211 *cfg, struct net_device *dev, u16 active_sca
 	}
 	CFGP2P_DBG(("\n"));
 
+	WL_MSG(dev->name, "P2P_SEARCH sync ID: %d, bssidx: %d\n", sync_id, bssidx);
 	ret = wldev_iovar_setbuf_bsscfg(pri_dev, "p2p_scan",
 		memblk, memsize, cfg->ioctl_buf, WLC_IOCTL_MAXLEN, bssidx, &cfg->ioctl_buf_sync);
-	WL_MSG(dev->name, "P2P_SEARCH sync ID: %d, bssidx: %d\n", sync_id, bssidx);
 	if (ret == BCME_OK) {
 		wl_set_p2p_status(cfg, SCANNING);
 	}
@@ -2422,7 +2422,7 @@ wl_cfgp2p_unregister_ndev(struct bcm_cfg80211 *cfg)
 
 	return 0;
 }
-static int wl_cfgp2p_start_xmit(struct sk_buff *skb, struct net_device *ndev)
+static netdev_tx_t wl_cfgp2p_start_xmit(struct sk_buff *skb, struct net_device *ndev)
 {
 
 	if (skb)
@@ -2577,7 +2577,6 @@ wl_cfgp2p_add_p2p_disc_if(struct bcm_cfg80211 *cfg)
 	cfg->p2p_wdev = wdev;
 
 	printf("P2P interface registered\n");
-	printf("%s: wdev: %p, wdev->net: %p\n", __FUNCTION__, wdev, wdev->netdev);
 	return wdev;
 }
 

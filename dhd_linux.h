@@ -135,6 +135,10 @@ typedef struct dhd_if {
 	u64 last_sync;
 	struct work_struct  blk_tsfl_work;
 #endif /* DHDTCPSYNC_FLOOD_BLK */
+#ifdef WLEASYMESH
+	uint8 _1905_al_ucast[ETHER_ADDR_LEN];
+	uint8 _1905_al_mcast[ETHER_ADDR_LEN];
+#endif /* WLEASYMESH */
 } dhd_if_t;
 
 struct ipv6_work_info_t {
@@ -256,6 +260,11 @@ typedef struct wifi_adapter_info {
 	uint		bus_type;
 	uint		bus_num;
 	uint		slot_num;
+	int			index;
+	int 		gpio_wl_reg_on;
+#ifdef CUSTOMER_OOB
+	int 		gpio_wl_host_wake;
+#endif
 	wait_queue_head_t status_event;
 	unsigned long status;
 #if defined(BT_OVER_SDIO)
@@ -274,19 +283,15 @@ typedef struct wifi_adapter_info {
 #define WLAN_PLAT_AP_FLAG	0x02
 #if !defined(CONFIG_WIFI_CONTROL_FUNC)
 struct wifi_platform_data {
-#ifdef BUS_POWER_RESTORE
 	int (*set_power)(int val, wifi_adapter_info_t *adapter);
-#else
-	int (*set_power)(int val);
-#endif
 	int (*set_reset)(int val);
 	int (*set_carddetect)(int val);
-	void *(*mem_prealloc)(int section, unsigned long size);
-#ifdef CUSTOM_MULTI_MAC
-	int (*get_mac_addr)(unsigned char *buf, char *name);
+#ifdef BCMDHD_MDRIVER
+	void *(*mem_prealloc)(uint bus_type, int index, int section, unsigned long size);
 #else
-	int (*get_mac_addr)(unsigned char *buf);
+	void *(*mem_prealloc)(int section, unsigned long size);
 #endif
+	int (*get_mac_addr)(unsigned char *buf, int ifidx);
 #ifdef BCMSDIO
 	int (*get_wake_irq)(void);
 #endif // endif
@@ -413,7 +418,7 @@ wifi_adapter_info_t* dhd_wifi_platform_get_adapter(uint32 bus_type, uint32 bus_n
 int wifi_platform_set_power(wifi_adapter_info_t *adapter, bool on, unsigned long msec);
 int wifi_platform_bus_enumerate(wifi_adapter_info_t *adapter, bool device_present);
 int wifi_platform_get_irq_number(wifi_adapter_info_t *adapter, unsigned long *irq_flags_ptr);
-int wifi_platform_get_mac_addr(wifi_adapter_info_t *adapter, unsigned char *buf, char *name);
+int wifi_platform_get_mac_addr(wifi_adapter_info_t *adapter, unsigned char *buf, int ifidx);
 #ifdef CUSTOM_COUNTRY_CODE
 void *wifi_platform_get_country_code(wifi_adapter_info_t *adapter, char *ccode,
 	u32 flags);

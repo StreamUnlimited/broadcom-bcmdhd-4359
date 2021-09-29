@@ -1139,9 +1139,9 @@ dhd_dbg_set_event_log_tag(dhd_pub_t *dhdp, uint16 tag, uint8 set)
 	}
 
 	ret = dhd_wl_ioctl_cmd(dhdp, WLC_SET_VAR, iovbuf, sizeof(iovbuf), TRUE, 0);
-	if (ret) {
-		DHD_ERROR(("%s set log tag iovar failed %d\n", __FUNCTION__, ret));
-	}
+//	if (ret) {
+//		DHD_ERROR(("%s set log tag iovar failed %d\n", __FUNCTION__, ret));
+//	}
 }
 
 int
@@ -1413,7 +1413,7 @@ __dhd_dbg_free_tx_pkts(dhd_pub_t *dhdp, dhd_dbg_tx_info_t *tx_pkts,
 	count = 0;
 	while ((count < pkt_count) && tx_pkts) {
 		if (tx_pkts->info.pkt) {
-			linux_pktfree_irq(dhdp->osh, tx_pkts->info.pkt, TRUE);
+			PKTFREE(dhdp->osh, tx_pkts->info.pkt, TRUE);
 		}
 		tx_pkts++;
 		count++;

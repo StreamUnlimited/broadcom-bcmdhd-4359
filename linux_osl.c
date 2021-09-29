@@ -572,7 +572,7 @@ osl_is_flag_set(osl_t *osh, uint32 mask)
 	return (osh->flags & mask);
 }
 
-#if (defined(__ARM_ARCH_7A__) && !defined(DHD_USE_COHERENT_MEM_FOR_RING)) || \
+#if (defined(BCMPCIE) && defined(__ARM_ARCH_7A__) && !defined(DHD_USE_COHERENT_MEM_FOR_RING)) || \
 	defined(STB_SOC_WIFI)
 
 inline int BCMFASTPATH
@@ -661,6 +661,7 @@ osl_pci_write_config(osl_t *osh, uint offset, uint size, uint val)
 
 }
 
+#ifdef BCMPCIE
 /* return bus # for the pci device pointed by osh->pdev */
 uint
 osl_pci_bus(osl_t *osh)
@@ -713,6 +714,7 @@ osl_pci_device(osl_t *osh)
 
 	return osh->pdev;
 }
+#endif
 
 static void
 osl_pcmcia_attr(osl_t *osh, uint offset, char *buf, int size, bool write)
@@ -1165,9 +1167,11 @@ osl_delay(uint usec)
 void
 osl_sleep(uint ms)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 36)
 	if (ms < 20)
 		usleep_range(ms*1000, ms*1000 + 1000);
 	else
+#endif
 		msleep(ms);
 }
 
@@ -1188,7 +1192,11 @@ osl_localtime_ns(void)
 {
 	uint64 ts_nsec = 0;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 36)
 	ts_nsec = local_clock();
+#else
+	ts_nsec = cpu_clock(smp_processor_id());
+#endif
 
 	return ts_nsec;
 }
@@ -1199,7 +1207,11 @@ osl_get_localtime(uint64 *sec, uint64 *usec)
 	uint64 ts_nsec = 0;
 	unsigned long rem_nsec = 0;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 36)
 	ts_nsec = local_clock();
+#else
+	ts_nsec = cpu_clock(smp_processor_id());
+#endif
 	rem_nsec = do_div(ts_nsec, NSEC_PER_SEC);
 	*sec = (uint64)ts_nsec;
 	*usec = (uint64)(rem_nsec / MSEC_PER_SEC);
@@ -2101,6 +2113,7 @@ osl_do_gettimediff(struct osl_timespec *cur_ts, struct osl_timespec *old_ts)
 	return total_diff_us;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 39)
 void
 osl_get_monotonic_boottime(struct osl_timespec *ts)
 {
@@ -2121,3 +2134,4 @@ osl_get_monotonic_boottime(struct osl_timespec *ts)
 	ts->tv_nsec = curtime.tv_nsec;
 	ts->tv_usec = curtime.tv_nsec / 1000;
 }
+#endif

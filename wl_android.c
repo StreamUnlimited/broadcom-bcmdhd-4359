@@ -1636,7 +1636,7 @@ int wl_android_wifi_on(struct net_device *dev)
 			if (ret == 0) {
 				break;
 			}
-			ANDROID_ERROR(("\nfailed to power up wifi chip, retry again (%d left) **\n\n",
+			ANDROID_ERROR(("failed to power up wifi chip, retry again (%d left) **\n\n",
 				retry));
 #ifdef BCMPCIE
 			dhd_net_bus_devreset(dev, TRUE);
@@ -1644,7 +1644,7 @@ int wl_android_wifi_on(struct net_device *dev)
 			dhd_net_wifi_platform_set_power(dev, FALSE, WIFI_TURNOFF_DELAY);
 		} while (retry-- > 0);
 		if (ret != 0) {
-			ANDROID_ERROR(("\nfailed to power up wifi chip, max retry reached **\n\n"));
+			ANDROID_ERROR(("failed to power up wifi chip, max retry reached **\n\n"));
 #ifdef BCM_DETECT_TURN_ON_FAILURE
 			BUG_ON(1);
 #endif /* BCM_DETECT_TURN_ON_FAILURE */
@@ -6126,7 +6126,9 @@ int wl_android_init(void)
 {
 	int ret = 0;
 
-#if defined(ENABLE_INSMOD_NO_FW_LOAD) || defined(BUS_POWER_RESTORE)
+#ifdef ENABLE_INSMOD_NO_POWER_OFF
+	dhd_download_fw_on_driverload = TRUE;
+#elif defined(ENABLE_INSMOD_NO_FW_LOAD) || defined(BUS_POWER_RESTORE)
 	dhd_download_fw_on_driverload = FALSE;
 #endif /* ENABLE_INSMOD_NO_FW_LOAD */
 	if (!iface_name[0]) {
@@ -6445,8 +6447,12 @@ wl_android_set_wifi_on_flag(bool enable)
 #ifdef WL_STATIC_IF
 #include <dhd_linux_priv.h>
 struct net_device *
-wl_cfg80211_register_static_if(struct bcm_cfg80211 *cfg, u16 iftype, char *ifname)
+wl_cfg80211_register_static_if(struct bcm_cfg80211 *cfg, u16 iftype, char *ifname,
+	int static_ifidx)
 {
+#if defined(CUSTOM_MULTI_MAC) || defined(WL_EXT_IAPSTA)
+	dhd_pub_t *dhd = cfg->pub;
+#endif
 	struct net_device *ndev;
 	struct wireless_dev *wdev = NULL;
 	int ifidx = WL_STATIC_IFIDX; /* Register ndev with a reserved ifidx */
@@ -6457,7 +6463,6 @@ wl_cfg80211_register_static_if(struct bcm_cfg80211 *cfg, u16 iftype, char *ifnam
 #endif /* DHD_USE_RANDMAC */
 #ifdef CUSTOM_MULTI_MAC
 	char hw_ether[62];
-	dhd_pub_t *dhd = cfg->pub;
 #endif
 
 	WL_INFORM_MEM(("[STATIC_IF] Enter (%s) iftype:%d\n", ifname, iftype));
@@ -6468,21 +6473,24 @@ wl_cfg80211_register_static_if(struct bcm_cfg80211 *cfg, u16 iftype, char *ifnam
 	}
 	primary_ndev = bcmcfg_to_prmry_ndev(cfg);
 
+	ifidx += static_ifidx;
 #ifdef DHD_USE_RANDMAC
 	dhd_generate_mac_addr(&ea_addr);
 	(void)memcpy_s(mac_addr, ETH_ALEN, ea_addr.octet, ETH_ALEN);
 #else
 #if defined(CUSTOM_MULTI_MAC)
-	if (wifi_platform_get_mac_addr(dhd->info->adapter, hw_ether, "wlan1")) {
-#endif
-	/* Use primary mac with locally admin bit set */
-	(void)memcpy_s(mac_addr, ETH_ALEN, primary_ndev->dev_addr, ETH_ALEN);
-	mac_addr[0] |= 0x02;
-#if defined(CUSTOM_MULTI_MAC)
-	} else {
+	if (!wifi_platform_get_mac_addr(dhd->info->adapter, hw_ether, static_ifidx+1)) {
 		(void)memcpy_s(mac_addr, ETH_ALEN, hw_ether, ETH_ALEN);
-	}
+	} else
 #endif
+	{
+		/* Use primary mac with locally admin bit set */
+		(void)memcpy_s(mac_addr, ETH_ALEN, primary_ndev->dev_addr, ETH_ALEN);
+		mac_addr[0] |= 0x02;
+#ifdef WL_EXT_IAPSTA
+		wl_ext_iapsta_get_vif_macaddr(dhd, static_ifidx+1, mac_addr);
+#endif
+	}
 #endif /* DHD_USE_RANDMAC */
 
 	ndev = wl_cfg80211_allocate_if(cfg, ifidx, ifname, mac_addr,
@@ -6510,8 +6518,8 @@ wl_cfg80211_register_static_if(struct bcm_cfg80211 *cfg, u16 iftype, char *ifnam
 		goto fail;
 	}
 
-	cfg->static_ndev = ndev;
-	cfg->static_ndev_state = NDEV_STATE_OS_IF_CREATED;
+	cfg->static_ndev[static_ifidx] = ndev;
+	cfg->static_ndev_state[static_ifidx] = NDEV_STATE_OS_IF_CREATED;
 	wl_cfg80211_update_iflist_info(cfg, ndev, ifidx, NULL, WL_BSSIDX_MAX,
 		ifname, NDEV_STATE_OS_IF_CREATED);
 	WL_INFORM_MEM(("Static I/F (%s) Registered\n", ndev->name));
@@ -6525,8 +6533,10 @@ fail:
 void
 wl_cfg80211_unregister_static_if(struct bcm_cfg80211 *cfg)
 {
+	int i;
+
 	WL_INFORM_MEM(("[STATIC_IF] Enter\n"));
-	if (!cfg || !cfg->static_ndev) {
+	if (!cfg) {
 		ANDROID_ERROR(("invalid input\n"));
 		return;
 	}
@@ -6534,7 +6544,10 @@ wl_cfg80211_unregister_static_if(struct bcm_cfg80211 *cfg)
 	/* wdev free will happen from notifier context */
 	/* free_netdev(cfg->static_ndev);
 	*/
-	unregister_netdev(cfg->static_ndev);
+	for (i=0; i<DHD_MAX_STATIC_IFS; i++) {
+		if (cfg->static_ndev[i])
+			unregister_netdev(cfg->static_ndev[i]);
+	}
 }
 
 s32
@@ -6546,24 +6559,26 @@ wl_cfg80211_static_if_open(struct net_device *net)
 	u16 iftype = net->ieee80211_ptr ? net->ieee80211_ptr->iftype : 0;
 	u16 wl_iftype, wl_mode;
 #ifdef CUSTOM_MULTI_MAC
-	char hw_ether[62];
 	dhd_pub_t *dhd = dhd_get_pub(net);
+	char hw_ether[62];
 #endif
+	int static_ifidx;
 
 	WL_INFORM_MEM(("[STATIC_IF] dev_open ndev %p and wdev %p\n", net, net->ieee80211_ptr));
-	ASSERT(cfg->static_ndev == net);
+	static_ifidx = wl_cfg80211_static_ifidx(cfg, net);
+	ASSERT(static_ifidx >= 0);
 
 	if (cfg80211_to_wl_iftype(iftype, &wl_iftype, &wl_mode) <  0) {
 		return BCME_ERROR;
 	}
-	if (cfg->static_ndev_state != NDEV_STATE_FW_IF_CREATED) {
+	if (cfg->static_ndev_state[static_ifidx] != NDEV_STATE_FW_IF_CREATED) {
 #ifdef CUSTOM_MULTI_MAC
-		if (!wifi_platform_get_mac_addr(dhd->info->adapter, hw_ether, net->name))
+		if (!wifi_platform_get_mac_addr(dhd->info->adapter, hw_ether, static_ifidx+1))
 			memcpy(net->dev_addr, hw_ether, ETHER_ADDR_LEN);
 #endif
 		wdev = wl_cfg80211_add_if(cfg, primary_ndev, wl_iftype, net->name, net->dev_addr);
 		if (!wdev) {
-			ANDROID_ERROR(("[STATIC_IF] wdev is NULL, can't proceed"));
+			ANDROID_ERROR(("[STATIC_IF] wdev is NULL, can't proceed\n"));
 			return BCME_ERROR;
 		}
 	} else {
@@ -6579,8 +6594,11 @@ wl_cfg80211_static_if_close(struct net_device *net)
 	int ret = BCME_OK;
 	struct bcm_cfg80211 *cfg = wl_get_cfg(net);
 	struct net_device *primary_ndev = bcmcfg_to_prmry_ndev(cfg);
+	int static_ifidx;
 
-	if (cfg->static_ndev_state == NDEV_STATE_FW_IF_CREATED) {
+	static_ifidx = wl_cfg80211_static_ifidx(cfg, net);
+
+	if (cfg->static_ndev_state[static_ifidx] == NDEV_STATE_FW_IF_CREATED) {
 		if (mutex_is_locked(&cfg->if_sync) == TRUE) {
 			ret = _wl_cfg80211_del_if(cfg, primary_ndev, net->ieee80211_ptr, net->name);
 		} else {
@@ -6596,13 +6614,13 @@ wl_cfg80211_static_if_close(struct net_device *net)
 }
 struct net_device *
 wl_cfg80211_post_static_ifcreate(struct bcm_cfg80211 *cfg,
-	wl_if_event_info *event, u8 *addr, s32 iface_type)
+	wl_if_event_info *event, u8 *addr, s32 iface_type, int static_ifidx)
 {
 	struct net_device *new_ndev = NULL;
 	struct wireless_dev *wdev = NULL;
 
 	WL_INFORM_MEM(("Updating static iface after Fw IF create \n"));
-	new_ndev = cfg->static_ndev;
+	new_ndev = cfg->static_ndev[static_ifidx];
 
 	if (new_ndev) {
 		wdev = new_ndev->ieee80211_ptr;
@@ -6611,7 +6629,7 @@ wl_cfg80211_post_static_ifcreate(struct bcm_cfg80211 *cfg,
 		(void)memcpy_s(new_ndev->dev_addr, ETH_ALEN, addr, ETH_ALEN);
 	}
 
-	cfg->static_ndev_state = NDEV_STATE_FW_IF_CREATED;
+	cfg->static_ndev_state[static_ifidx] = NDEV_STATE_FW_IF_CREATED;
 	wl_cfg80211_update_iflist_info(cfg, new_ndev, event->ifidx, addr, event->bssidx,
 		event->name, NDEV_STATE_FW_IF_CREATED);
 	return new_ndev;
@@ -6619,8 +6637,13 @@ wl_cfg80211_post_static_ifcreate(struct bcm_cfg80211 *cfg,
 s32
 wl_cfg80211_post_static_ifdel(struct bcm_cfg80211 *cfg, struct net_device *ndev)
 {
-	cfg->static_ndev_state = NDEV_STATE_FW_IF_DELETED;
-	wl_cfg80211_update_iflist_info(cfg, ndev, WL_STATIC_IFIDX, NULL,
+	int static_ifidx;
+	int ifidx = WL_STATIC_IFIDX;
+
+	static_ifidx = wl_cfg80211_static_ifidx(cfg, ndev);
+	ifidx += static_ifidx;
+	cfg->static_ndev_state[static_ifidx] = NDEV_STATE_FW_IF_DELETED;
+	wl_cfg80211_update_iflist_info(cfg, ndev, ifidx, NULL,
 		WL_BSSIDX_MAX, NULL, NDEV_STATE_FW_IF_DELETED);
 	wl_cfg80211_clear_per_bss_ies(cfg, ndev->ieee80211_ptr);
 	wl_dealloc_netinfo_by_wdev(cfg, ndev->ieee80211_ptr);

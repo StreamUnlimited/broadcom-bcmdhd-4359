@@ -113,7 +113,9 @@ int get_scheduler_policy(struct task_struct *p);
  * Dongle used to have its own time stamp for console messages
  * With this flag, DHD and Dongle console messges will have same time zone
  */
+#ifdef BCMPCIE
 #define DHD_H2D_LOG_TIME_SYNC
+#endif
 /* Forward decls */
 struct dhd_bus;
 struct dhd_prot;
@@ -331,7 +333,9 @@ typedef enum download_type {
 
 /* For supporting multiple interfaces */
 #define DHD_MAX_IFS			16
+#ifndef DHD_MAX_STATIC_IFS
 #define DHD_MAX_STATIC_IFS	1
+#endif
 #define DHD_DEL_IF		-0xE
 #define DHD_BAD_IF		-0xF
 #define DHD_DUMMY_INFO_IF	0xDEAF	/* Hack i/f to handle events from INFO Ring */
@@ -822,7 +826,7 @@ extern void clear_debug_dump_time(char *str);
 
 #define DHDIF_FWDER(dhdif)      FALSE
 
-#define DHD_COMMON_DUMP_PATH	"/data/misc/wifi/"
+#define DHD_COMMON_DUMP_PATH	"/data/vendor/misc/wifi/"
 
 struct cntry_locales_custom {
 	char iso_abbrev[WLC_CNTRY_BUF_SZ];      /* ISO 3166-1 country abbreviation */
@@ -1588,6 +1592,11 @@ extern void dhd_os_wake_lock_destroy(struct dhd_info *dhd);
 extern void dhd_os_scan_wake_lock_timeout(dhd_pub_t *pub, int val);
 extern void dhd_os_scan_wake_unlock(dhd_pub_t *pub);
 #endif /* BCMPCIE_SCAN_WAKELOCK */
+
+#ifdef WLEASYMESH
+extern int dhd_get_1905_almac(dhd_pub_t *dhdp, uint8 ifidx, uint8* ea, bool mcast);
+extern int dhd_set_1905_almac(dhd_pub_t *dhdp, uint8 ifidx, uint8* ea, bool mcast);
+#endif /* WLEASYMESH */
 
 inline static void MUTEX_LOCK_SOFTAP_SET_INIT(dhd_pub_t * dhdp)
 {
@@ -2956,9 +2965,15 @@ void custom_rps_map_clear(struct netdev_rx_queue *queue);
 #define RPS_CPUS_MASK_IBSS "10"
 #define RPS_CPUS_WLAN_CORE_ID 4
 #else
+#if defined(DHD_TPUT_PATCH)
+#define RPS_CPUS_MASK "f"
+#define RPS_CPUS_MASK_P2P "f"
+#define RPS_CPUS_MASK_IBSS "f"
+#else
 #define RPS_CPUS_MASK "6"
 #define RPS_CPUS_MASK_P2P "6"
 #define RPS_CPUS_MASK_IBSS "6"
+#endif
 #endif /* CONFIG_MACH_UNIVERSAL7420 || CONFIG_SOC_EXYNOS8890 */
 #endif // endif
 

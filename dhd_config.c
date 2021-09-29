@@ -67,15 +67,6 @@ uint dump_msg_level = 0;
 #define MAXSZ_BUF		4096
 #define MAXSZ_CONFIG	8192
 
-#ifndef WL_CFG80211
-#define htod32(i) i
-#define htod16(i) i
-#define dtoh32(i) i
-#define dtoh16(i) i
-#define htodchanspec(i) i
-#define dtohchanspec(i) i
-#endif
-
 #if defined(BCMSDIO) && defined(DYNAMIC_MAX_HDR_READ)
 extern uint firstread;
 #endif
@@ -110,9 +101,9 @@ const chip_name_map_t chip_name_map[] = {
 	{BCM43362_CHIP_ID,	1,	DONT_CARE,	"bcm40181a2",		""},
 	{BCM4330_CHIP_ID,	4,	FW_TYPE_G,	"bcm40183b2",		""},
 	{BCM4330_CHIP_ID,	4,	FW_TYPE_AG,	"bcm40183b2_ag",	""},
-	{BCM43430_CHIP_ID,	0,	DONT_CARE,	"bcm43438a0",		""},
-	{BCM43430_CHIP_ID,	1,	DONT_CARE,	"bcm43438a1",		""},
-	{BCM43430_CHIP_ID,	2,	DONT_CARE,	"bcm43436b0",		""},
+	{BCM43430_CHIP_ID,	0,	DONT_CARE,	"bcm43438a0",		"ap6212"},
+	{BCM43430_CHIP_ID,	1,	DONT_CARE,	"bcm43438a1",		"ap6212a"},
+	{BCM43430_CHIP_ID,	2,	DONT_CARE,	"bcm43436b0",		"ap6236"},
 	{BCM43012_CHIP_ID,	1,	FW_TYPE_G,	"bcm43013b0",		""},
 	{BCM43012_CHIP_ID,	1,	FW_TYPE_AG,	"bcm43013c0_ag",	""},
 	{BCM43012_CHIP_ID,	2,	DONT_CARE,	"bcm43013c1_ag",	""},
@@ -121,13 +112,13 @@ const chip_name_map_t chip_name_map[] = {
 	{BCM43341_CHIP_ID,	2,	DONT_CARE,	"bcm43341b0_ag",	""},
 	{BCM4324_CHIP_ID,	5,	DONT_CARE,	"bcm43241b4_ag",	""},
 	{BCM4335_CHIP_ID,	2,	DONT_CARE,	"bcm4339a0_ag",		""},
-	{BCM4339_CHIP_ID,	1,	DONT_CARE,	"bcm4339a0_ag",		""},
-	{BCM4345_CHIP_ID,	6,	DONT_CARE,	"bcm43455c0_ag",	""},
+	{BCM4339_CHIP_ID,	1,	DONT_CARE,	"bcm4339a0_ag",		"ap6335"},
+	{BCM4345_CHIP_ID,	6,	DONT_CARE,	"bcm43455c0_ag",	"ap6255"},
 	{BCM43454_CHIP_ID,	6,	DONT_CARE,	"bcm43455c0_ag",	""},
-	{BCM4345_CHIP_ID,	9,	DONT_CARE,	"bcm43456c5_ag",	""},
+	{BCM4345_CHIP_ID,	9,	DONT_CARE,	"bcm43456c5_ag",	"ap6256"},
 	{BCM43454_CHIP_ID,	9,	DONT_CARE,	"bcm43456c5_ag",	""},
 	{BCM4354_CHIP_ID,	1,	DONT_CARE,	"bcm4354a1_ag",		""},
-	{BCM4354_CHIP_ID,	2,	DONT_CARE,	"bcm4356a2_ag",		""},
+	{BCM4354_CHIP_ID,	2,	DONT_CARE,	"bcm4356a2_ag",		"ap6356"},
 	{BCM4356_CHIP_ID,	2,	DONT_CARE,	"bcm4356a2_ag",		""},
 	{BCM4371_CHIP_ID,	2,	DONT_CARE,	"bcm4356a2_ag",		""},
 	{BCM43569_CHIP_ID,	3,	DONT_CARE,	"bcm4358a3_ag",		""},
@@ -136,7 +127,7 @@ const chip_name_map_t chip_name_map[] = {
 	{BCM43751_CHIP_ID,	1,	DONT_CARE,	"bcm43751a1_ag",	""},
 	{BCM43751_CHIP_ID,	2,	DONT_CARE,	"bcm43751a2_ag",	""},
 	{BCM43752_CHIP_ID,	1,	DONT_CARE,	"bcm43752a1_ag",	""},
-	{BCM43752_CHIP_ID,	2,	DONT_CARE,	"bcm43752a2_ag",	""},
+	{BCM43752_CHIP_ID,	2,	DONT_CARE,	"bcm43752a2_ag",	"ap6275s"},
 #endif
 #ifdef BCMPCIE
 	{BCM4354_CHIP_ID,	2,	DONT_CARE,	"bcm4356a2_pcie_ag",	""},
@@ -146,12 +137,12 @@ const chip_name_map_t chip_name_map[] = {
 	{BCM43751_CHIP_ID,	2,	DONT_CARE,	"bcm43751a2_pcie_ag",	""},
 	{BCM43752_CHIP_ID,	1,	DONT_CARE,	"bcm43752a1_pcie_ag",	""},
 	{BCM43752_CHIP_ID,	2,	DONT_CARE,	"bcm43752a2_pcie_ag",	""},
-	{BCM4375_CHIP_ID,	5,	DONT_CARE,	"bcm4375b4_pcie_ag",	""},
+	{BCM4375_CHIP_ID,	5,	DONT_CARE,	"bcm4375b4_pcie_ag",	"ap6275hh3"},
 #endif
 #ifdef BCMDBUS
 	{BCM43143_CHIP_ID,	2,	DONT_CARE,	"bcm43143b0",		""},
 	{BCM43242_CHIP_ID,	1,	DONT_CARE,	"bcm43242a1_ag",	""},
-	{BCM43569_CHIP_ID,	2,	DONT_CARE,	"bcm4358u_ag",		""},
+	{BCM43569_CHIP_ID,	2,	DONT_CARE,	"bcm4358u_ag",		"ap62x8"},
 #endif
 };
 
@@ -400,6 +391,8 @@ dhd_conf_set_fw_name_by_mac(dhd_pub_t *dhd, char *fw_path)
 		fw_type = FW_TYPE_P2P;
 	else if (strstr(name_ptr, "_mesh"))
 		fw_type = FW_TYPE_MESH;
+	else if (strstr(name_ptr, "_ezmesh"))
+		fw_type = FW_TYPE_EZMESH;
 	else if (strstr(name_ptr, "_es"))
 		fw_type = FW_TYPE_ES;
 	else if (strstr(name_ptr, "_mfg"))
@@ -416,6 +409,8 @@ dhd_conf_set_fw_name_by_mac(dhd_pub_t *dhd, char *fw_path)
 			fw_type_new = FW_TYPE_P2P;
 		else if (strstr(mac_list[i].name, "_mesh"))
 			fw_type_new = FW_TYPE_MESH;
+		else if (strstr(mac_list[i].name, "_ezmesh"))
+			fw_type_new = FW_TYPE_EZMESH;
 		else if (strstr(mac_list[i].name, "_es"))
 			fw_type_new = FW_TYPE_ES;
 		else if (strstr(mac_list[i].name, "_mfg"))
@@ -633,6 +628,22 @@ exit:
 		kfree(raw_data);
 	return ret;
 }
+
+bool
+dhd_conf_legacy_msi_chip(dhd_pub_t *dhd)
+{
+	uint chip;
+
+	chip = dhd->conf->chip;
+
+	if (chip == BCM4354_CHIP_ID || chip == BCM4356_CHIP_ID ||
+		chip == BCM4371_CHIP_ID ||
+		chip == BCM4359_CHIP_ID) {
+		return true;
+	}
+
+	return false;
+}
 #endif
 
 void
@@ -784,6 +795,8 @@ dhd_conf_set_fw_name_by_chip(dhd_pub_t *dhd, char *fw_path)
 		fw_type = FW_TYPE_P2P;
 	else if (strstr(name_ptr, "_mesh"))
 		fw_type = FW_TYPE_MESH;
+	else if (strstr(name_ptr, "_ezmesh"))
+		fw_type = FW_TYPE_EZMESH;
 	else if (strstr(name_ptr, "_es"))
 		fw_type = FW_TYPE_ES;
 	else if (strstr(name_ptr, "_mfg"))
@@ -792,6 +805,10 @@ dhd_conf_set_fw_name_by_chip(dhd_pub_t *dhd, char *fw_path)
 		fw_type = FW_TYPE_MINIME;
 	else
 		fw_type = FW_TYPE_STA;
+#ifdef WLEASYMESH
+	if (dhd->conf->fw_type == FW_TYPE_EZMESH)
+		fw_type = FW_TYPE_EZMESH;
+#endif /* WLEASYMESH */
 
 	row_chip = dhd_conf_match_chip(dhd, ag_type);
 	if (row_chip && strlen(row_chip->chip_name)) {
@@ -806,6 +823,8 @@ dhd_conf_set_fw_name_by_chip(dhd_pub_t *dhd, char *fw_path)
 			strcat(name_ptr, "_p2p.bin");
 		else if (fw_type == FW_TYPE_MESH)
 			strcat(name_ptr, "_mesh.bin");
+		else if (fw_type == FW_TYPE_EZMESH)
+			strcat(name_ptr, "_ezmesh.bin");
 		else if (fw_type == FW_TYPE_ES)
 			strcat(name_ptr, "_es.bin");
 		else if (fw_type == FW_TYPE_MFG)
@@ -830,6 +849,8 @@ dhd_conf_set_fw_name_by_chip(dhd_pub_t *dhd, char *fw_path)
 			strcat(name_ptr, "_p2p.bin");
 		else if (fw_type == FW_TYPE_MESH)
 			strcat(name_ptr, "_mesh.bin");
+		else if (fw_type == FW_TYPE_EZMESH)
+			strcat(name_ptr, "_ezmesh.bin");
 		else if (fw_type == FW_TYPE_ES)
 			strcat(name_ptr, "_es.bin");
 		else if (fw_type == FW_TYPE_MFG)
@@ -1064,31 +1085,42 @@ dhd_conf_set_conf_name_by_chip(dhd_pub_t *dhd, char *conf_path)
 }
 #endif
 
-#ifdef HOST_TPUT_TEST
+#ifdef TPUT_MONITOR
 void
-dhd_conf_tput_measure(dhd_pub_t *dhd)
+dhd_conf_tput_monitor(dhd_pub_t *dhd)
 {
 	struct dhd_conf *conf = dhd->conf;
 
-	if (conf->tput_measure_ms) {
+	if (conf->tput_monitor_ms) {
 		if (conf->tput_ts.tv_sec == 0 && conf->tput_ts.tv_nsec == 0) {
 			osl_do_gettimeofday(&conf->tput_ts);
 		} else {
 			struct osl_timespec cur_ts;
+			int32 tput_tx, tput_rx;
 			uint32 diff_ms;
-			int32 tx_tput = 0, rx_tput = 0, net_tput = 0;
-			static unsigned long last_tx = 0, last_rx = 0, last_net_tx = 0;
+			unsigned long diff_bytes;
 			osl_do_gettimeofday(&cur_ts);
 			diff_ms = osl_do_gettimediff(&cur_ts, &conf->tput_ts)/1000;
-			if (diff_ms >= conf->tput_measure_ms) {
-				tx_tput = (int32)(((dhd->dstats.tx_bytes-last_tx)/1024/1024)*8)*1000/diff_ms;
-				rx_tput = (int32)(((dhd->dstats.rx_bytes-last_rx)/1024/1024)*8)*1000/diff_ms;
-				net_tput = (int32)(((conf->net_len-last_net_tx)/1024/1024)*8)*1000/diff_ms;
-				last_tx = dhd->dstats.tx_bytes;
-				last_rx = dhd->dstats.rx_bytes;
-				last_net_tx = conf->net_len;
+			if (diff_ms >= conf->tput_monitor_ms) {
+				diff_bytes = dhd->dstats.tx_bytes-conf->last_tx;
+				tput_tx = (int32)((diff_bytes/1024/1024)*8)*1000/diff_ms;
+				if (tput_tx == 0)
+					tput_tx = (int32)(diff_bytes*8/1024/1024)*1000/diff_ms;
+				diff_bytes = dhd->dstats.rx_bytes-conf->last_rx;
+				tput_rx = (int32)((diff_bytes/1024/1024)*8)*1000/diff_ms;
+				if (tput_rx == 0)
+					tput_rx = (int32)(diff_bytes*8/1024/1024)*1000/diff_ms;
+				diff_bytes = conf->net_len-conf->last_net_tx;
+				conf->tput_net = (int32)((diff_bytes/1024/1024)*8)*1000/diff_ms;
+				if (conf->tput_net == 0)
+					conf->tput_net = (int32)(diff_bytes*8/1024/1024)*1000/diff_ms;
+				conf->last_tx = dhd->dstats.tx_bytes;
+				conf->last_rx = dhd->dstats.rx_bytes;
+				conf->last_net_tx = conf->net_len;
+				conf->tput_bus = tput_tx + tput_rx;
 				memcpy(&conf->tput_ts, &cur_ts, sizeof(struct osl_timespec));
-				CONFIG_TRACE("xmit=%dMbps, tx=%dMbps, rx=%dMbps\n", net_tput, tx_tput, rx_tput);
+				CONFIG_TRACE("xmit=%dMbps, tx=%dMbps, rx=%dMbps\n",
+					conf->tput_net, tput_tx, tput_rx);
 			}
 		}
 	}
@@ -1106,7 +1138,12 @@ dhd_conf_set_tput_patch(dhd_pub_t *dhd)
 		conf->pktsetsum = TRUE;
 #ifdef BCMSDIO
 		conf->dhd_dpc_prio = 98;
-		conf->disable_proptx = 1;
+/* need to check if CPU can support multi-core first,
+ * so don't enable it by default.
+ */
+//		conf->dpc_cpucore = 2;
+//		conf->dpc_cpucore = 3;
+//		conf->disable_proptx = 1;
 		conf->frameburst = 1;
 #ifdef DYNAMIC_MAX_HDR_READ
 		conf->max_hdr_read = 256;
@@ -1296,6 +1333,47 @@ dhd_conf_set_bufiovar(dhd_pub_t *dhd, int ifidx, uint cmd, char *name,
 	return ret;
 }
 
+static int
+dhd_conf_iovar_buf(dhd_pub_t *dhd, int ifidx, int cmd, char *name,
+	char *buf, int len)
+{
+	char *iovbuf = NULL;
+	int ret = -1, iovbuf_len = WLC_IOCTL_MEDLEN;
+	s32 iovar_len;
+
+	iovbuf = kmalloc(iovbuf_len, GFP_KERNEL);
+	if (iovbuf == NULL) {
+		CONFIG_ERROR("Failed to allocate buffer of %d bytes\n", iovbuf_len);
+		goto exit;
+	}
+
+	if (cmd == WLC_GET_VAR) {
+		if (bcm_mkiovar(name, buf, len, iovbuf, iovbuf_len)) {
+			ret = dhd_wl_ioctl_cmd(dhd, cmd, iovbuf, iovbuf_len, FALSE, ifidx);
+			if (!ret) {
+				memcpy(buf, iovbuf, len);
+			} else {
+				CONFIG_ERROR("get iovar %s failed %d\n", name, ret);
+			}
+		} else {
+			CONFIG_ERROR("mkiovar %s failed\n", name);
+		}
+	} else if (cmd == WLC_SET_VAR) {
+		iovar_len = bcm_mkiovar(name, buf, len, iovbuf, iovbuf_len);
+		if (iovar_len > 0)
+			ret = dhd_wl_ioctl_cmd(dhd, cmd, iovbuf, iovar_len, TRUE, ifidx);
+		else
+			ret = BCME_BUFTOOSHORT;
+		if (ret < 0)
+			CONFIG_ERROR("%s setting failed %d, len=%d\n", name, ret, len);
+	}
+
+exit:
+	if (iovbuf)
+		kfree(iovbuf);
+	return ret;
+}
+
 int
 dhd_conf_get_iovar(dhd_pub_t *dhd, int ifidx, int cmd, char *name,
 	char *buf, int len)
@@ -1324,18 +1402,79 @@ dhd_conf_get_iovar(dhd_pub_t *dhd, int ifidx, int cmd, char *name,
 }
 
 static int
-dhd_conf_rsdb_mode(dhd_pub_t *dhd, char *buf)
+dhd_conf_rsdb_mode(dhd_pub_t *dhd, char *cmd, char *buf)
 {
 	wl_config_t rsdb_mode_cfg = {1, 0};
 
 	if (buf) {
 		rsdb_mode_cfg.config = (int)simple_strtol(buf, NULL, 0);
 		CONFIG_MSG("rsdb_mode %d\n", rsdb_mode_cfg.config);
-		dhd_conf_set_bufiovar(dhd, 0, WLC_SET_VAR, "rsdb_mode", (char *)&rsdb_mode_cfg,
+		dhd_conf_set_bufiovar(dhd, 0, WLC_SET_VAR, cmd, (char *)&rsdb_mode_cfg,
 			sizeof(rsdb_mode_cfg), TRUE);
 	}
 
 	return 0;
+}
+
+int
+dhd_conf_reg2args(dhd_pub_t *dhd, char *cmd, bool set, uint32 index, uint32 *val)
+{
+	char var[WLC_IOCTL_SMLEN];
+	uint32 int_val, len;
+	void *ptr = NULL;
+	int ret = 0;
+
+	len = sizeof(int_val);
+	int_val = htod32(index);
+	memset(var, 0, sizeof(var));
+	memcpy(var, (char *)&int_val, sizeof(int_val));
+
+	if (set) {
+		int_val = htod32(*val);
+		memcpy(&var[len], (char *)&int_val, sizeof(int_val));
+		len += sizeof(int_val);
+		dhd_conf_iovar_buf(dhd, 0, WLC_SET_VAR, cmd, var, sizeof(var));
+	} else {
+		ret = dhd_conf_iovar_buf(dhd, 0, WLC_GET_VAR, cmd, var, sizeof(var));
+		if (ret < 0)
+			return ret;
+		ptr = var;
+		*val = dtoh32(*(int *)ptr);
+	}
+
+	return ret;
+}
+
+static int
+dhd_conf_btc_params(dhd_pub_t *dhd, char *cmd, char *buf)
+{
+	int ret = BCME_OK;
+	uint32 cur_val;
+	int index = 0, mask = 0, value = 0;
+	// btc_params=[index] [mask] [value]
+	// Ex: btc_params=82 0x0021 0x0001
+
+	if (buf) {
+		sscanf(buf, "%d %x %x", &index, &mask, &value);
+	}
+
+	CONFIG_TRACE("%s%d mask=0x%04x value=0x%04x\n", cmd, index, mask, value);
+
+	ret = dhd_conf_reg2args(dhd, cmd, FALSE, index, &cur_val);
+	CONFIG_TRACE("%s%d = 0x%04x\n", cmd, index, cur_val);
+	cur_val &= (~mask);
+	cur_val |= value;
+
+	// need to WLC_UP before btc_params
+	dhd_conf_set_intiovar(dhd, WLC_UP, "WLC_UP", 0, 0, FALSE);
+
+	CONFIG_TRACE("wl %s%d 0x%04x\n", cmd, index, cur_val);
+	ret = dhd_conf_reg2args(dhd, cmd, TRUE, index, &cur_val);
+
+	ret = dhd_conf_reg2args(dhd, cmd, FALSE, index, &cur_val);
+	CONFIG_MSG("%s%d = 0x%04x\n", cmd, index, cur_val);
+
+	return ret;
 }
 
 typedef struct sub_cmd_t {
@@ -1382,7 +1521,7 @@ wl_he_iovt2len(uint iovt)
 }
 
 static int
-dhd_conf_he_cmd(dhd_pub_t * dhd, char *buf)
+dhd_conf_he_cmd(dhd_pub_t * dhd, char *cmd, char *buf)
 {
 	int ret = BCME_OK, i;
 	bcm_xtlv_t *pxtlv = NULL;
@@ -1419,14 +1558,57 @@ dhd_conf_he_cmd(dhd_pub_t * dhd, char *buf)
 			return 0;
 		}
 		CONFIG_TRACE("he %s 0x%x\n", sub_cmd, he_val);
-		dhd_conf_set_bufiovar(dhd, 0, WLC_SET_VAR, "he", (char *)&mybuf,
+		dhd_conf_set_bufiovar(dhd, 0, WLC_SET_VAR, cmd, (char *)&mybuf,
 			sizeof(mybuf), TRUE);
 	}
 
 	return 0;
 }
 
-typedef int (tpl_parse_t)(dhd_pub_t *dhd, char *buf);
+#ifndef SUPPORT_RANDOM_MAC_SCAN
+int
+dhd_conf_scan_mac(dhd_pub_t * dhd, char *cmd, char *buf)
+{
+	uint8 buffer[WLC_IOCTL_SMLEN] = {0, };
+	wl_scanmac_t *sm = NULL;
+	wl_scanmac_enable_t *sm_enable = NULL;
+	int enable = 0, len = 0, ret = -1;
+	char sub_cmd[32], iovbuf[WLC_IOCTL_SMLEN];
+	s32 iovar_len;
+
+	memset(sub_cmd, 0, sizeof(sub_cmd));
+	if (buf) {
+		sscanf(buf, "%s %d", sub_cmd, &enable);
+	}
+
+	if (!strcmp(sub_cmd, "enable")) {
+		sm = (wl_scanmac_t *)buffer;
+		sm_enable = (wl_scanmac_enable_t *)sm->data;
+		sm->len = sizeof(*sm_enable);
+		sm_enable->enable = enable;
+		len = OFFSETOF(wl_scanmac_t, data) + sm->len;
+		sm->subcmd_id = WL_SCANMAC_SUBCMD_ENABLE;
+		CONFIG_TRACE("scanmac enable %d\n", sm_enable->enable);
+
+		iovar_len = bcm_mkiovar("scanmac", buffer, len, iovbuf, sizeof(iovbuf));
+		if (iovar_len > 0)
+			ret = dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf, iovar_len, TRUE, 0);
+		else
+			ret = BCME_BUFTOOSHORT;
+		if (ret == BCME_UNSUPPORTED)
+			CONFIG_TRACE("scanmac, UNSUPPORTED\n");
+		else if (ret != BCME_OK)
+			CONFIG_ERROR("%s setting failed %d, len=%d\n", "scanmac", ret, len);
+	}
+	else {
+		CONFIG_ERROR("wrong cmd \"%s %d\"\n", sub_cmd, enable);
+	}
+
+	return 0;
+}
+#endif
+
+typedef int (tpl_parse_t)(dhd_pub_t *dhd, char *name, char *buf);
 
 typedef struct iovar_tpl_t {
 	int cmd;
@@ -1437,6 +1619,10 @@ typedef struct iovar_tpl_t {
 const iovar_tpl_t iovar_tpl_list[] = {
 	{WLC_SET_VAR,	"rsdb_mode",	dhd_conf_rsdb_mode},
 	{WLC_SET_VAR,	"he",		dhd_conf_he_cmd},
+	{WLC_SET_VAR,	"btc_params",	dhd_conf_btc_params},
+#ifndef SUPPORT_RANDOM_MAC_SCAN
+	{WLC_SET_VAR,	"scanmac",		dhd_conf_scan_mac},
+#endif
 };
 
 static int iovar_tpl_parse(const iovar_tpl_t *tpl, int tpl_count,
@@ -1450,7 +1636,7 @@ static int iovar_tpl_parse(const iovar_tpl_t *tpl, int tpl_count,
 			break;
 	}
 	if (i < tpl_count && tpl->parse) {
-		ret = tpl->parse(dhd, buf);
+		ret = tpl->parse(dhd, name, buf);
 	} else {
 		ret = -1;
 	}
@@ -2045,6 +2231,10 @@ int
 dhd_conf_check_hostsleep(dhd_pub_t *dhd, int cmd, void *buf, int len,
 	int *hostsleep_set, int *hostsleep_val, int *ret)
 {
+	if (dhd->hang_reason) {
+		*ret = BCME_EPERM;
+		goto exit;
+	}
 	if (dhd->conf->insuspend & (NO_TXCTL_IN_SUSPEND | WOWL_IN_SUSPEND)) {
 		if (cmd == WLC_SET_VAR) {
 			char *psleep = NULL;
@@ -2485,7 +2675,7 @@ dhd_conf_set_suspend_event(dhd_pub_t *dhd, int suspend)
 					msg.event_type = hton32(WLC_E_DEAUTH_IND);
 					msg.status = 0;
 					msg.reason = hton32(DOT11_RC_DEAUTH_LEAVING);
-#if defined(WL_EXT_IAPSTA) || defined(USE_IW)
+#ifdef WL_EVENT
 					wl_ext_event_send(dhd->event_params, &msg, NULL);
 #endif
 #ifdef WL_CFG80211
@@ -2552,6 +2742,9 @@ dhd_conf_set_suspend_resume(dhd_pub_t *dhd, int suspend)
 	}
 
 	if (suspend) {
+#ifdef TPUT_MONITOR
+		wl_tput_monitor_set_timer(dhd, 0);
+#endif /* TPUT_MONITOR */
 		if (dhd->op_mode & DHD_FLAG_STA_MODE) {
 			dhd_conf_set_intiovar(dhd, WLC_SET_VAR, "roam_off",
 				dhd->conf->roam_off_suspend, 0, FALSE);
@@ -2666,6 +2859,9 @@ dhd_conf_set_suspend_resume(dhd_pub_t *dhd, int suspend)
 			dhd_conf_set_intiovar(dhd, WLC_SET_PM, "WLC_SET_PM", pm, 0, FALSE);
 		}
 		conf->suspended = FALSE;
+#ifdef TPUT_MONITOR
+		wl_tput_monitor_set_timer(dhd, conf->tput_monitor_ms);
+#endif /* TPUT_MONITOR */
 	}
 
 	return 0;
@@ -2861,7 +3057,7 @@ dhd_conf_read_log_level(dhd_pub_t *dhd, char *full_param, uint len_param)
 #if defined(DHD_DEBUG)
 	else if (!strncmp("dhd_console_ms=", full_param, len_param)) {
 		dhd->dhd_console_ms = (int)simple_strtol(data, NULL, 0);
-		CONFIG_MSG("dhd_console_ms = 0x%X\n", dhd->dhd_console_ms);
+		CONFIG_MSG("dhd_console_ms = %d\n", dhd->dhd_console_ms);
 	}
 #endif
 	else
@@ -3623,6 +3819,12 @@ dhd_conf_read_sdio_params(dhd_pub_t *dhd, char *full_param, uint len_param)
 		CONFIG_MSG("ramsize = %d\n", conf->ramsize);
 	}
 #endif
+#ifdef BCMSDIO_INTSTATUS_WAR
+	else if (!strncmp("read_intr_mode=", full_param, len_param)) {
+		conf->read_intr_mode = (int)simple_strtol(data, NULL, 0);
+		CONFIG_MSG("read_intr_mode = %d\n", conf->read_intr_mode);
+	}
+#endif
 	else
 		return false;
 
@@ -3875,15 +4077,19 @@ dhd_conf_read_others(dhd_pub_t *dhd, char *full_param, uint len_param)
 		conf->in4way = (int)simple_strtol(data, NULL, 0);
 		CONFIG_MSG("in4way = 0x%x\n", conf->in4way);
 	}
+	else if (!strncmp("war=", full_param, len_param)) {
+		conf->war = (int)simple_strtol(data, NULL, 0);
+		CONFIG_MSG("war = 0x%x\n", conf->war);
+	}
 	else if (!strncmp("wl_preinit=", full_param, len_param)) {
 		if (conf->wl_preinit) {
 			kfree(conf->wl_preinit);
 			conf->wl_preinit = NULL;
 		}
-		if (!(conf->wl_preinit = kmalloc(len_param+1, GFP_KERNEL))) {
+		if (!(conf->wl_preinit = kmalloc(strlen(data)+1, GFP_KERNEL))) {
 			CONFIG_ERROR("kmalloc failed\n");
 		} else {
-			memset(conf->wl_preinit, 0, len_param+1);
+			memset(conf->wl_preinit, 0, strlen(data)+1);
 			strcpy(conf->wl_preinit, data);
 			CONFIG_MSG("wl_preinit = %s\n", conf->wl_preinit);
 		}
@@ -3893,10 +4099,10 @@ dhd_conf_read_others(dhd_pub_t *dhd, char *full_param, uint len_param)
 			kfree(conf->wl_suspend);
 			conf->wl_suspend = NULL;
 		}
-		if (!(conf->wl_suspend = kmalloc(len_param+1, GFP_KERNEL))) {
+		if (!(conf->wl_suspend = kmalloc(strlen(data)+1, GFP_KERNEL))) {
 			CONFIG_ERROR("kmalloc failed\n");
 		} else {
-			memset(conf->wl_suspend, 0, len_param+1);
+			memset(conf->wl_suspend, 0, strlen(data)+1);
 			strcpy(conf->wl_suspend, data);
 			CONFIG_MSG("wl_suspend = %s\n", conf->wl_suspend);
 		}
@@ -3906,10 +4112,10 @@ dhd_conf_read_others(dhd_pub_t *dhd, char *full_param, uint len_param)
 			kfree(conf->wl_resume);
 			conf->wl_resume = NULL;
 		}
-		if (!(conf->wl_resume = kmalloc(len_param+1, GFP_KERNEL))) {
+		if (!(conf->wl_resume = kmalloc(strlen(data)+1, GFP_KERNEL))) {
 			CONFIG_ERROR("kmalloc failed\n");
 		} else {
-			memset(conf->wl_resume, 0, len_param+1);
+			memset(conf->wl_resume, 0, strlen(data)+1);
 			strcpy(conf->wl_resume, data);
 			CONFIG_MSG("wl_resume = %s\n", conf->wl_resume);
 		}
@@ -3942,21 +4148,39 @@ dhd_conf_read_others(dhd_pub_t *dhd, char *full_param, uint len_param)
 #ifdef PROPTX_MAXCOUNT
 	else if (!strncmp("proptx_maxcnt_2g=", full_param, len_param)) {
 		conf->proptx_maxcnt_2g = (int)simple_strtol(data, NULL, 0);
-		CONFIG_MSG("proptx_maxcnt_2g = 0x%x\n", conf->proptx_maxcnt_2g);
+		CONFIG_MSG("proptx_maxcnt_2g = %d\n", conf->proptx_maxcnt_2g);
 	}
 	else if (!strncmp("proptx_maxcnt_5g=", full_param, len_param)) {
 		conf->proptx_maxcnt_5g = (int)simple_strtol(data, NULL, 0);
-		CONFIG_MSG("proptx_maxcnt_5g = 0x%x\n", conf->proptx_maxcnt_5g);
+		CONFIG_MSG("proptx_maxcnt_5g = %d\n", conf->proptx_maxcnt_5g);
 	}
 #endif
-#ifdef HOST_TPUT_TEST
+#ifdef TPUT_MONITOR
 	else if (!strncmp("data_drop_mode=", full_param, len_param)) {
 		conf->data_drop_mode = (int)simple_strtol(data, NULL, 0);
-		CONFIG_MSG("data_drop_mode = 0x%x\n", conf->data_drop_mode);
+		CONFIG_MSG("data_drop_mode = %d\n", conf->data_drop_mode);
 	}
-	else if (!strncmp("tput_measure_ms=", full_param, len_param)) {
-		conf->tput_measure_ms= (int)simple_strtol(data, NULL, 0);
-		CONFIG_MSG("tput_measure_ms = 0x%x\n", conf->tput_measure_ms);
+	else if (!strncmp("tput_monitor_ms=", full_param, len_param)) {
+		conf->tput_monitor_ms = (int)simple_strtol(data, NULL, 0);
+		CONFIG_MSG("tput_monitor_ms = %d\n", conf->tput_monitor_ms);
+	}
+#endif
+#ifdef SCAN_SUPPRESS
+	else if (!strncmp("scan_intput=", full_param, len_param)) {
+		conf->scan_intput = (int)simple_strtol(data, NULL, 0);
+		CONFIG_MSG("scan_intput = 0x%x\n", conf->scan_intput);
+	}
+	else if (!strncmp("scan_tput_thresh=", full_param, len_param)) {
+		conf->scan_tput_thresh = (int)simple_strtol(data, NULL, 0);
+		CONFIG_MSG("scan_tput_thresh = %d\n", conf->scan_tput_thresh);
+	}
+	else if (!strncmp("scan_busy_tmo=", full_param, len_param)) {
+		conf->scan_busy_tmo = (int)simple_strtol(data, NULL, 0);
+		CONFIG_MSG("scan_busy_tmo = %d\n", conf->scan_busy_tmo);
+	}
+	else if (!strncmp("scan_busy_thresh=", full_param, len_param)) {
+		conf->scan_busy_thresh = (int)simple_strtol(data, NULL, 0);
+		CONFIG_MSG("scan_busy_thresh = %d\n", conf->scan_busy_thresh);
 	}
 #endif
 #ifdef DHD_TPUT_PATCH
@@ -3980,7 +4204,7 @@ dhd_conf_read_others(dhd_pub_t *dhd, char *full_param, uint len_param)
 		CONFIG_MSG("pktsetsum = %d\n", conf->pktsetsum);
 	}
 #endif
-#if defined(SET_XPS_CPUS)
+#ifdef SET_XPS_CPUS
 	else if (!strncmp("xps_cpus=", full_param, len_param)) {
 		if (!strncmp(data, "1", 1))
 			conf->xps_cpus = TRUE;
@@ -3989,7 +4213,7 @@ dhd_conf_read_others(dhd_pub_t *dhd, char *full_param, uint len_param)
 		CONFIG_MSG("xps_cpus = %d\n", conf->xps_cpus);
 	}
 #endif
-#if defined(SET_RPS_CPUS)
+#ifdef SET_RPS_CPUS
 	else if (!strncmp("rps_cpus=", full_param, len_param)) {
 		if (!strncmp(data, "1", 1))
 			conf->rps_cpus = TRUE;
@@ -3998,6 +4222,28 @@ dhd_conf_read_others(dhd_pub_t *dhd, char *full_param, uint len_param)
 		CONFIG_MSG("rps_cpus = %d\n", conf->rps_cpus);
 	}
 #endif
+#ifdef CHECK_DOWNLOAD_FW
+	else if (!strncmp("fwchk=", full_param, len_param)) {
+		if (!strncmp(data, "1", 1))
+			conf->fwchk = TRUE;
+		else
+			conf->fwchk = FALSE;
+		CONFIG_MSG("fwchk = %d\n", conf->fwchk);
+	}
+#endif
+	else if (!strncmp("vndr_ie_assocreq=", full_param, len_param)) {
+		if (conf->vndr_ie_assocreq) {
+			kfree(conf->vndr_ie_assocreq);
+			conf->vndr_ie_assocreq = NULL;
+		}
+		if (!(conf->vndr_ie_assocreq = kmalloc(strlen(data)+1, GFP_KERNEL))) {
+			CONFIG_ERROR("kmalloc failed\n");
+		} else {
+			memset(conf->vndr_ie_assocreq, 0, strlen(data)+1);
+			strcpy(conf->vndr_ie_assocreq, data);
+			CONFIG_MSG("vndr_ie_assocreq = %s\n", conf->vndr_ie_assocreq);
+		}
+	}
 	else
 		return false;
 
@@ -4346,11 +4592,16 @@ dhd_conf_postinit_ioctls(dhd_pub_t *dhd)
 		dhd_conf_set_wl_cmd(dhd, he_cmd, TRUE);
 	}
 #if defined(WLEASYMESH)
-	if (conf->chip == BCM4359_CHIP_ID) {
-		char ezmesh[] = "mbss=1, rsdb_mode=0";
-		dhd_conf_set_wl_cmd(dhd, ezmesh, TRUE);
+	if (conf->fw_type == FW_TYPE_EZMESH) {
+		if (conf->chip == BCM4359_CHIP_ID) {
+			char ezmesh[] = "mbss=1, rsdb_mode=0";
+			dhd_conf_set_wl_cmd(dhd, ezmesh, TRUE);
+		} else {
+			char ezmesh[] = "mbss=1";
+			dhd_conf_set_wl_cmd(dhd, ezmesh, TRUE);
+		}
 	}
-#endif
+#endif /* WLEASYMESH */
 #if defined(BCMSDIO)
 	if (conf->devid == BCM43751_CHIP_ID)
 #elif defined(BCMPCIE)
@@ -4364,6 +4615,12 @@ dhd_conf_postinit_ioctls(dhd_pub_t *dhd)
 	}
 #ifdef UPDATE_MODULE_NAME
 	dhd_conf_compat_func(dhd);
+#endif
+#ifndef SUPPORT_RANDOM_MAC_SCAN
+	{
+		char scanmac[] = "scanmac=enable 0";
+		dhd_conf_set_wl_cmd(dhd, scanmac, TRUE);
+	}
 #endif
 	dhd_conf_set_wl_cmd(dhd, conf->wl_preinit, TRUE);
 
@@ -4404,6 +4661,10 @@ dhd_conf_preinit(dhd_pub_t *dhd)
 	if (conf->wl_resume) {
 		kfree(conf->wl_resume);
 		conf->wl_resume = NULL;
+	}
+	if (conf->vndr_ie_assocreq) {
+		kfree(conf->vndr_ie_assocreq);
+		conf->vndr_ie_assocreq = NULL;
 	}
 	conf->band = -1;
 	memset(&conf->bw_cap, -1, sizeof(conf->bw_cap));
@@ -4457,7 +4718,7 @@ dhd_conf_preinit(dhd_pub_t *dhd)
 	conf->tx_max_offset = 0;
 	conf->txglomsize = SDPCM_DEFGLOM_SIZE;
 	conf->txctl_tmo_fix = 300;
-	conf->txglom_mode = SDPCM_TXGLOM_MDESC;
+	conf->txglom_mode = SDPCM_TXGLOM_CPY;
 	conf->deferred_tx_len = 0;
 	conf->dhd_txminmax = 1;
 	conf->txinrx_thres = -1;
@@ -4476,10 +4737,14 @@ dhd_conf_preinit(dhd_pub_t *dhd)
 #if defined(HW_OOB)
 	conf->oob_enabled_later = FALSE;
 #endif
+#ifdef BCMSDIO_INTSTATUS_WAR
+	conf->read_intr_mode = 0;
+#endif
 #endif
 #ifdef BCMPCIE
 	conf->bus_deepsleep_disable = 1;
 	conf->flow_ring_queue_threshold = FLOW_RING_QUEUE_THRESHOLD;
+	conf->d2h_intr_method = -1;
 #endif
 	conf->dpc_cpucore = -1;
 	conf->rxf_cpucore = -1;
@@ -4528,25 +4793,36 @@ dhd_conf_preinit(dhd_pub_t *dhd)
 #endif
 	conf->pktprio8021x = -1;
 	conf->ctrl_resched = 2;
-	conf->in4way = STA_NO_SCAN_IN4WAY | STA_WAIT_DISCONNECTED | AP_WAIT_STA_RECONNECT;
+	conf->in4way = STA_NO_SCAN_IN4WAY | STA_WAIT_DISCONNECTED |
+		STA_START_AUTH_DELAY | AP_WAIT_STA_RECONNECT;
+	conf->war = FW_REINIT_INCSA;
 #ifdef PROPTX_MAXCOUNT
 	conf->proptx_maxcnt_2g = 46;
 	conf->proptx_maxcnt_5g = WL_TXSTATUS_FREERUNCTR_MASK;
 #endif /* DYNAMIC_PROPTX_MAXCOUNT */
-#ifdef HOST_TPUT_TEST
+#ifdef TPUT_MONITOR
 	conf->data_drop_mode = 0;
-	conf->tput_measure_ms = 0;
+	conf->tput_monitor_ms = 0;
+#endif
+#ifdef SCAN_SUPPRESS
+	conf->scan_intput = SCAN_CURCHAN_INTPUT;
+	conf->scan_busy_thresh = 10;
+	conf->scan_busy_tmo = 120;
+	conf->scan_tput_thresh = 5;
 #endif
 #ifdef DHD_TPUT_PATCH
 	conf->tput_patch = FALSE;
 	conf->mtu = 0;
 	conf->pktsetsum = FALSE;
 #endif
-#if defined(SET_XPS_CPUS)
+#ifdef SET_XPS_CPUS
 	conf->xps_cpus = FALSE;
 #endif
-#if defined(SET_RPS_CPUS)
+#ifdef SET_RPS_CPUS
 	conf->rps_cpus = FALSE;
+#endif
+#ifdef CHECK_DOWNLOAD_FW
+	conf->fwchk = FALSE;
 #endif
 #ifdef ISAM_PREINIT
 	memset(conf->isam_init, 0, sizeof(conf->isam_init));
@@ -4626,6 +4902,13 @@ dhd_conf_preinit(dhd_pub_t *dhd)
 #endif
 	init_waitqueue_head(&conf->event_complete);
 
+#if defined(BCMSDIO) && defined(CUSTOMER_HW_AMLOGIC)
+	if (conf->chip != BCM43752_CHIP_ID) {
+		dhd_slpauto = FALSE;
+	}
+	conf->txglom_mode = SDPCM_TXGLOM_CPY;
+#endif
+
 	return 0;
 }
 
@@ -4658,6 +4941,10 @@ dhd_conf_reset(dhd_pub_t *dhd)
 	if (conf->wl_resume) {
 		kfree(conf->wl_resume);
 		conf->wl_resume = NULL;
+	}
+	if (conf->vndr_ie_assocreq) {
+		kfree(conf->vndr_ie_assocreq);
+		conf->vndr_ie_assocreq = NULL;
 	}
 	memset(conf, 0, sizeof(dhd_conf_t));
 	return 0;
@@ -4722,6 +5009,10 @@ dhd_conf_detach(dhd_pub_t *dhd)
 		if (conf->wl_resume) {
 			kfree(conf->wl_resume);
 			conf->wl_resume = NULL;
+		}
+		if (conf->vndr_ie_assocreq) {
+			kfree(conf->vndr_ie_assocreq);
+			conf->vndr_ie_assocreq = NULL;
 		}
 		MFREE(dhd->osh, conf, sizeof(dhd_conf_t));
 	}

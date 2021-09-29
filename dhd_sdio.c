@@ -66,6 +66,11 @@
 #include <dhdioctl.h>
 #include <sdiovar.h>
 #include <dhd_config.h>
+#ifdef DHD_PKTDUMP_TOFW
+#include <dhd_linux_pktdump.h>
+#endif
+#include <linux/mmc/sdio_func.h>
+#include <dhd_linux.h>
 
 #ifdef PROP_TXSTATUS
 #include <dhd_wlfc.h>
@@ -1110,8 +1115,20 @@ dhdsdio_clk_kso_enab(dhd_bus_t *bus, bool on)
 	uint8 wr_val = 0, rd_val, cmp_val, bmask;
 	int err = 0;
 	int try_cnt = 0;
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 1, 0))
+	wifi_adapter_info_t *adapter = NULL;
+	uint32 bus_type = -1, bus_num = -1, slot_num = -1;
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(5, 1, 0) */
 
 	KSO_DBG(("%s> op:%s\n", __FUNCTION__, (on ? "KSO_SET" : "KSO_CLR")));
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 1, 0))
+	dhd_bus_get_ids(bus, &bus_type, &bus_num, &slot_num);
+	adapter = dhd_wifi_platform_get_adapter(bus_type, bus_num, slot_num);
+	sdio_retune_crc_disable(adapter->sdio_func);
+	if (on)
+		sdio_retune_hold_now(adapter->sdio_func);
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(5, 1, 0) */
 
 	wr_val |= (on << SBSDIO_FUNC1_SLEEPCSR_KSO_SHIFT);
 
@@ -1122,7 +1139,7 @@ dhdsdio_clk_kso_enab(dhd_bus_t *bus, bool on)
 	 * after clearing KSO bit, to avoid polling of KSO bit.
 	 */
 	if ((!on) && (bus->sih->chip == BCM43012_CHIP_ID)) {
-		return err;
+		goto exit;
 	}
 
 	if (on) {
@@ -1160,6 +1177,13 @@ dhdsdio_clk_kso_enab(dhd_bus_t *bus, bool on)
 		DHD_ERROR(("%s> op:%s, ERROR: try_cnt:%d, rd_val:%x, ERR:%x \n",
 			__FUNCTION__, (on ? "KSO_SET" : "KSO_CLR"), try_cnt, rd_val, err));
 	}
+
+exit:
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 1, 0))
+	if (on)
+		sdio_retune_release(adapter->sdio_func);
+	sdio_retune_crc_enable(adapter->sdio_func);
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(5, 1, 0) */
 
 	return err;
 }
@@ -2596,7 +2620,7 @@ static int dhdsdio_txpkt(dhd_bus_t *bus, uint chan, void** pkts, int num_pkt, bo
 	 * so it will take the aligned length and buffer pointer.
 	 */
 	pkt_chain = PKTNEXT(osh, head_pkt) ? head_pkt : NULL;
-#ifdef HOST_TPUT_TEST
+#ifdef TPUT_MONITOR
 	if ((bus->dhd->conf->data_drop_mode == TXPKT_DROP) && (total_len > 500)) {
 		ret = BCME_OK;
 	} else {
@@ -2662,7 +2686,7 @@ dhdsdio_sendfromq(dhd_bus_t *bus, uint maxframes)
 	osl_t *osh;
 	dhd_pub_t *dhd = bus->dhd;
 	sdpcmd_regs_t *regs = bus->regs;
-#ifdef DHD_LOSSLESS_ROAMING
+#if defined(DHD_LOSSLESS_ROAMING) || defined(DHD_PKTDUMP_TOFW)
 	uint8 *pktdata;
 	struct ether_header *eh;
 #ifdef BDC
@@ -2710,7 +2734,7 @@ dhdsdio_sendfromq(dhd_bus_t *bus, uint maxframes)
 				ASSERT(0);
 				break;
 			}
-#ifdef DHD_LOSSLESS_ROAMING
+#if defined(DHD_LOSSLESS_ROAMING) || defined(DHD_PKTDUMP_TOFW)
 			pktdata = (uint8 *)PKTDATA(osh, pkts[i]);
 #ifdef BDC
 			/* Skip BDC header */
@@ -2719,6 +2743,7 @@ dhdsdio_sendfromq(dhd_bus_t *bus, uint maxframes)
 			pktdata += BDC_HEADER_LEN + (data_offset << 2);
 #endif // endif
 			eh = (struct ether_header *)pktdata;
+#ifdef DHD_LOSSLESS_ROAMING
 			if (eh->ether_type == hton16(ETHER_TYPE_802_1X)) {
 				uint8 prio = (uint8)PKTPRIO(pkts[i]);
 
@@ -2733,6 +2758,11 @@ dhdsdio_sendfromq(dhd_bus_t *bus, uint maxframes)
 				}
 			}
 #endif /* DHD_LOSSLESS_ROAMING */
+#ifdef DHD_PKTDUMP_TOFW
+			dhd_dump_pkt(bus->dhd, BDC_GET_IF_IDX(bdc_header), pktdata,
+				(uint32)PKTLEN(bus->dhd->osh, pkts[i]), TRUE, NULL, NULL);
+#endif
+#endif /* DHD_LOSSLESS_ROAMING || DHD_8021X_DUMP */
 			if (!bus->dhd->conf->orphan_move)
 				PKTORPHAN(pkts[i], bus->dhd->conf->tsq);
 			datalen += PKTLEN(osh, pkts[i]);
@@ -6881,6 +6911,59 @@ dhdsdio_hostmail(dhd_bus_t *bus, uint32 *hmbd)
 	return intstatus;
 }
 
+#ifdef BCMSDIO_INTSTATUS_WAR
+static uint32
+dhdsdio_read_intstatus_byte(dhd_bus_t *bus)
+{
+	bcmsdh_info_t *sdh = bus->sdh;
+	sdpcmd_regs_t *regs = bus->regs;
+	uint32 newstatus = 0, intstatus_byte = 0;
+	uint retries = 0;
+	int err1 = 0, err2 = 0, err3 = 0, err4 = 0;
+
+	DHD_TRACE(("%s: Enter\n", __FUNCTION__));
+
+	/* read_intr_mode:
+	  * 0: word mode only (default)
+	  * 1: byte mode after read word failed
+	  * 2: byte mode only
+	*/
+	if (bus->dhd->conf->read_intr_mode) {
+		if (bus->dhd->conf->read_intr_mode == 1) {
+			R_SDREG(newstatus, &regs->intstatus, retries);
+			if (!bcmsdh_regfail(bus->sdh)) {
+				goto exit;
+			}
+		}
+		intstatus_byte = bcmsdh_cfg_read(bus->sdh, SDIO_FUNC_1,
+			((unsigned long)&regs->intstatus & 0xffff) + 0, &err1);
+		if (!err1)
+			newstatus |= intstatus_byte;
+		intstatus_byte = bcmsdh_cfg_read(bus->sdh, SDIO_FUNC_1,
+			((unsigned long)&regs->intstatus & 0xffff) + 1, &err2) << 8;
+		if (!err2)
+			newstatus |= intstatus_byte;
+		intstatus_byte |= bcmsdh_cfg_read(bus->sdh, SDIO_FUNC_1,
+			((unsigned long)&regs->intstatus & 0xffff) + 2, &err3) << 16;
+		if (!err3)
+			newstatus |= intstatus_byte;
+		intstatus_byte |= bcmsdh_cfg_read(bus->sdh, SDIO_FUNC_1,
+			((unsigned long)&regs->intstatus & 0xffff) + 3, &err4) << 24;
+		if (!err4)
+			newstatus |= intstatus_byte;
+
+		if (!err1 || !err2 || !err3 || !err4)
+			sdh->regfail = FALSE;
+	}
+	else {
+		R_SDREG(newstatus, &regs->intstatus, retries);
+	}
+
+exit:
+	return newstatus;
+}
+#endif
+
 static bool
 dhdsdio_dpc(dhd_bus_t *bus)
 {
@@ -6983,7 +7066,11 @@ dhdsdio_dpc(dhd_bus_t *bus)
 	bcmsdh_btsdio_process_f3_intr();
 #endif /* defined (BT_OVER_SDIO) */
 
+#ifdef BCMSDIO_INTSTATUS_WAR
+		newstatus = dhdsdio_read_intstatus_byte(bus);
+#else
 		R_SDREG(newstatus, &regs->intstatus, retries);
+#endif
 		bus->f1regdata++;
 		if (bcmsdh_regfail(bus->sdh))
 			newstatus = 0;
@@ -7257,8 +7344,8 @@ exit:
 		}
 	}
 
-#ifdef HOST_TPUT_TEST
-	dhd_conf_tput_measure(bus->dhd);
+#ifdef TPUT_MONITOR
+	dhd_conf_tput_monitor(bus->dhd);
 #endif
 
 	if (bus->ctrl_wait && TXCTLOK(bus))
@@ -7361,10 +7448,12 @@ dhdsdio_isr(void *arg)
 }
 
 #ifdef PKT_STATICS
-void dhd_bus_dump_txpktstatics(struct dhd_bus *bus)
+void
+dhd_bus_dump_txpktstatics(dhd_pub_t *dhdp)
 {
-	uint i;
+	dhd_bus_t *bus = dhdp->bus;
 	uint32 total = 0;
+	uint i;
 
 	printf("%s: TYPE EVENT: %d pkts (size=%d) transfered\n",
 		__FUNCTION__, bus->tx_statics.event_count, bus->tx_statics.event_size);
@@ -7421,8 +7510,10 @@ void dhd_bus_dump_txpktstatics(struct dhd_bus *bus)
 		__FUNCTION__, bus->tx_statics.test_count, bus->tx_statics.test_size);
 }
 
-void dhd_bus_clear_txpktstatics(struct dhd_bus *bus)
+void
+dhd_bus_clear_txpktstatics(dhd_pub_t *dhdp)
 {
+	dhd_bus_t *bus = dhdp->bus;
 	memset((uint8*) &bus->tx_statics, 0, sizeof(pkt_statics_t));
 }
 #endif
@@ -8799,7 +8890,7 @@ dhdsdio_probe_init(dhd_bus_t *bus, osl_t *osh, void *sdh)
 	bus->dotxinrx = TRUE;
 
 #ifdef PKT_STATICS
-	dhd_bus_clear_txpktstatics(bus);
+	dhd_bus_clear_txpktstatics(bus->dhd);
 #endif
 
 	return TRUE;
@@ -9207,7 +9298,9 @@ dhdsdio_download_code_file(struct dhd_bus *bus, char *pfw_path)
 	int len;
 	void *image = NULL;
 	uint8 *memblock = NULL, *memptr;
+#ifdef CHECK_DOWNLOAD_FW
 	uint8 *memptr_tmp = NULL; // terence: check downloaded firmware is correct
+#endif
 	uint memblock_size = MEMBLOCK;
 #ifdef DHD_DEBUG_DOWNLOADTIME
 	unsigned long initial_jiffies = 0;
@@ -9231,13 +9324,15 @@ dhdsdio_download_code_file(struct dhd_bus *bus, char *pfw_path)
 			memblock_size));
 		goto err;
 	}
-	if (dhd_msg_level & DHD_TRACE_VAL) {
+#ifdef CHECK_DOWNLOAD_FW
+	if (bus->dhd->conf->fwchk) {
 		memptr_tmp = MALLOC(bus->dhd->osh, MEMBLOCK + DHD_SDALIGN);
 		if (memptr_tmp == NULL) {
 			DHD_ERROR(("%s: Failed to allocate memory %d bytes\n", __FUNCTION__, MEMBLOCK));
 			goto err;
 		}
 	}
+#endif
 	if ((uint32)(uintptr)memblock % DHD_SDALIGN)
 		memptr += (DHD_SDALIGN - ((uint32)(uintptr)memblock % DHD_SDALIGN));
 
@@ -9278,7 +9373,8 @@ dhdsdio_download_code_file(struct dhd_bus *bus, char *pfw_path)
 			goto err;
 		}
 
-		if (dhd_msg_level & DHD_TRACE_VAL) {
+#ifdef CHECK_DOWNLOAD_FW
+		if (bus->dhd->conf->fwchk) {
 			bcmerror = dhdsdio_membytes(bus, FALSE, offset, memptr_tmp, len);
 			if (bcmerror) {
 				DHD_ERROR(("%s: error %d on reading %d membytes at 0x%08x\n",
@@ -9286,11 +9382,13 @@ dhdsdio_download_code_file(struct dhd_bus *bus, char *pfw_path)
 				goto err;
 			}
 			if (memcmp(memptr_tmp, memptr, len)) {
-				DHD_ERROR(("%s: Downloaded image is corrupted.\n", __FUNCTION__));
+				DHD_ERROR(("%s: Downloaded image is corrupted at 0x%08x\n", __FUNCTION__, offset));
+				bcmerror = BCME_ERROR;
 				goto err;
 			} else
 				DHD_INFO(("%s: Download, Upload and compare succeeded.\n", __FUNCTION__));
 		}
+#endif
 
 		offset += memblock_size;
 #ifdef DHD_DEBUG_DOWNLOADTIME
@@ -9306,10 +9404,12 @@ dhdsdio_download_code_file(struct dhd_bus *bus, char *pfw_path)
 err:
 	if (memblock)
 		MFREE(bus->dhd->osh, memblock, memblock_size + DHD_SDALIGN);
-	if (dhd_msg_level & DHD_TRACE_VAL) {
+#ifdef CHECK_DOWNLOAD_FW
+	if (bus->dhd->conf->fwchk) {
 		if (memptr_tmp)
 			MFREE(bus->dhd->osh, memptr_tmp, MEMBLOCK + DHD_SDALIGN);
 	}
+#endif
 
 	if (image)
 		dhd_os_close_image1(bus->dhd, image);
@@ -9859,7 +9959,7 @@ dhd_bus_devreset(dhd_pub_t *dhdp, uint8 flag)
 	}
 
 #ifdef PKT_STATICS
-	dhd_bus_clear_txpktstatics(bus);
+	dhd_bus_clear_txpktstatics(dhdp);
 #endif
 	return bcmerror;
 }

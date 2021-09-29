@@ -126,6 +126,7 @@ extern void osl_pcmcia_write_attr(osl_t *osh, uint offset, void *buf, int size);
 extern uint32 osl_pci_read_config(osl_t *osh, uint offset, uint size);
 extern void osl_pci_write_config(osl_t *osh, uint offset, uint size, uint val);
 
+#ifdef BCMPCIE
 /* PCI device bus # and slot # */
 #define OSL_PCI_BUS(osh)	osl_pci_bus(osh)
 #define OSL_PCI_SLOT(osh)	osl_pci_slot(osh)
@@ -136,6 +137,7 @@ extern uint osl_pci_slot(osl_t *osh);
 extern uint osl_pcie_domain(osl_t *osh);
 extern uint osl_pcie_bus(osl_t *osh);
 extern struct pci_dev *osl_pci_device(osl_t *osh);
+#endif
 
 #define OSL_ACP_COHERENCE		(1<<1L)
 #define OSL_FWDERBUF			(1<<2L)
@@ -243,7 +245,7 @@ extern void osl_preempt_enable(osl_t *osh);
 #define OSL_DISABLE_PREEMPTION(osh)	osl_preempt_disable(osh)
 #define OSL_ENABLE_PREEMPTION(osh)	osl_preempt_enable(osh)
 
-#if (!defined(DHD_USE_COHERENT_MEM_FOR_RING) && defined(__ARM_ARCH_7A__)) || \
+#if (defined(BCMPCIE) && !defined(DHD_USE_COHERENT_MEM_FOR_RING) && defined(__ARM_ARCH_7A__)) || \
 	defined(STB_SOC_WIFI)
 	extern void osl_cache_flush(void *va, uint size);
 	extern void osl_cache_inv(void *va, uint size);

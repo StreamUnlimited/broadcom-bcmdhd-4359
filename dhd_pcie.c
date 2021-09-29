@@ -628,8 +628,14 @@ dhdpcie_chip_support_msi(dhd_bus_t *bus)
  *
  * 'tcm' is the *host* virtual address at which tcm is mapped.
  */
+#ifdef DHD_BAR1_WINDOW_LESS_THAN_4MB
+int dhdpcie_bus_attach(osl_t *osh, dhd_bus_t **bus_ptr,
+	volatile char *regs, volatile char *tcm, void *pci_dev, wifi_adapter_info_t *adapter,
+	uint32 tcm_size)
+#else
 int dhdpcie_bus_attach(osl_t *osh, dhd_bus_t **bus_ptr,
 	volatile char *regs, volatile char *tcm, void *pci_dev, wifi_adapter_info_t *adapter)
+#endif
 {
 	dhd_bus_t *bus = NULL;
 	int ret = BCME_OK;
@@ -648,6 +654,9 @@ int dhdpcie_bus_attach(osl_t *osh, dhd_bus_t **bus_ptr,
 
 		bus->regs = regs;
 		bus->tcm = tcm;
+#ifdef DHD_BAR1_WINDOW_LESS_THAN_4MB
+		bus->tcm_size = tcm_size;
+#endif
 		bus->osh = osh;
 		/* Save pci_dev into dhd_bus, as it may be needed in dhd_attach */
 		bus->dev = (struct pci_dev *)pci_dev;
@@ -709,6 +718,8 @@ int dhdpcie_bus_attach(osl_t *osh, dhd_bus_t **bus_ptr,
 #ifdef DHD_MSI_SUPPORT
 		bus->d2h_intr_method = enable_msi && dhdpcie_chip_support_msi(bus) ?
 			PCIE_MSI : PCIE_INTX;
+		if (bus->dhd->conf->d2h_intr_method >= 0)
+			bus->d2h_intr_method = bus->dhd->conf->d2h_intr_method;
 #else
 		bus->d2h_intr_method = PCIE_INTX;
 #endif /* DHD_MSI_SUPPORT */
@@ -1061,7 +1072,8 @@ dhdpcie_bus_isr(dhd_bus_t *bus)
 			}
 		}
 
-		if (bus->d2h_intr_method == PCIE_MSI) {
+		if (bus->d2h_intr_method == PCIE_MSI &&
+				!dhd_conf_legacy_msi_chip(bus->dhd)) {
 			/* For MSI, as intstatus is cleared by firmware, no need to read */
 			goto skip_intstatus_read;
 		}
@@ -1108,12 +1120,16 @@ skip_intstatus_read:
 
 		bus->isr_intr_disable_count++;
 
+#ifdef CHIP_INTR_CONTROL
+		dhdpcie_bus_intr_disable(bus); /* Disable interrupt using IntMask!! */
+#else
 		/* For Linux, Macos etc (otherthan NDIS) instead of disabling
 		* dongle interrupt by clearing the IntMask, disable directly
 		* interrupt from the host side, so that host will not recieve
 		* any interrupts at all, even though dongle raises interrupts
 		*/
 		dhdpcie_disable_irq_nosync(bus); /* Disable interrupt!! */
+#endif /* HOST_INTR_CONTROL */
 
 		bus->intdis = TRUE;
 
@@ -1394,6 +1410,12 @@ dhdpcie_dongle_attach(dhd_bus_t *bus)
 		goto fail;
 	}
 
+#ifdef DHD_BAR1_WINDOW_LESS_THAN_4MB
+	/* Read bar1 window */
+	bus->bar1_win_base = OSL_PCI_READ_CONFIG(bus->osh, PCI_BAR1_WIN, 4);
+	DHD_ERROR(("%s: PCI_BAR1_WIN = %x\n", __FUNCTION__, bus->bar1_win_base));
+#endif
+
 	/* si_attach() will provide an SI handle and scan the backplane */
 	if (!(bus->sih = si_attach((uint)devid, osh, regsva, PCI_BUS, bus,
 	                           &bus->vars, &bus->varsz))) {
@@ -1528,6 +1550,11 @@ dhdpcie_dongle_attach(dhd_bus_t *bus)
 	/* WAR where the BAR1 window may not be sized properly */
 	W_REG(osh, &sbpcieregs->configaddr, 0x4e0);
 	val = R_REG(osh, &sbpcieregs->configdata);
+#ifdef DHD_BAR1_WINDOW_LESS_THAN_4MB
+	bus->bar1_win_mask = 0xffffffff - (bus->tcm_size - 1);
+	DHD_ERROR(("%s: BAR1 window val=%d mask=%x\n", __FUNCTION__, val, bus->bar1_win_mask));
+#endif
+
 	W_REG(osh, &sbpcieregs->configdata, val);
 
 	if (si_setcore(bus->sih, SYSMEM_CORE_ID, 0)) {
@@ -1556,7 +1583,11 @@ dhdpcie_dongle_attach(dhd_bus_t *bus)
 		/* cr4 has a different way to find the RAM size from TCM's */
 		if (!(bus->orig_ramsize = si_tcm_size(bus->sih))) {
 			DHD_ERROR(("%s: failed to find CR4-TCM memory!\n", __FUNCTION__));
+#ifdef DHD_BAR1_WINDOW_LESS_THAN_4MB
+			bus->orig_ramsize = 1310720;
+#else
 			goto fail;
+#endif
 		}
 		/* also populate base address */
 		switch ((uint16)bus->sih->chip) {
@@ -1928,7 +1959,11 @@ dhdpcie_bus_release(dhd_bus_t *bus)
 			bus->regs = NULL;
 		}
 		if (bus->tcm) {
+#ifdef DHD_BAR1_WINDOW_LESS_THAN_4MB
+			dhdpcie_bus_reg_unmap(osh, bus->tcm, bus->tcm_size);
+#else
 			dhdpcie_bus_reg_unmap(osh, bus->tcm, DONGLE_TCM_MAP_SIZE);
+#endif
 			bus->tcm = NULL;
 		}
 
@@ -2026,6 +2061,14 @@ dhdpcie_bus_cfg_set_bar0_win(dhd_bus_t *bus, uint32 data)
 {
 	OSL_PCI_WRITE_CONFIG(bus->osh, PCI_BAR0_WIN, 4, data);
 }
+
+#ifdef DHD_BAR1_WINDOW_LESS_THAN_4MB
+void
+dhdpcie_bus_cfg_set_bar1_win(dhd_bus_t *bus, uint32 data)
+{
+	OSL_PCI_WRITE_CONFIG(bus->osh, PCI_BAR1_WIN, 4, data);
+}
+#endif
 
 void
 dhdpcie_bus_dongle_setmemsize(struct dhd_bus *bus, int mem_size)
@@ -2846,7 +2889,9 @@ dhdpcie_download_code_file(struct dhd_bus *bus, char *pfw_path)
 	bool store_reset;
 	char *imgbuf = NULL;
 	uint8 *memblock = NULL, *memptr = NULL;
+#ifdef CHECK_DOWNLOAD_FW
 	uint8 *memptr_tmp = NULL; // terence: check downloaded firmware is correct
+#endif
 	int offset_end = bus->ramsize;
 	uint32 file_size = 0, read_len = 0;
 
@@ -2887,13 +2932,15 @@ dhdpcie_download_code_file(struct dhd_bus *bus, char *pfw_path)
 		bcmerror = BCME_NOMEM;
 		goto err;
 	}
-	if (dhd_msg_level & DHD_TRACE_VAL) {
+#ifdef CHECK_DOWNLOAD_FW
+	if (bus->dhd->conf->fwchk) {
 		memptr_tmp = MALLOC(bus->dhd->osh, MEMBLOCK + DHD_SDALIGN);
 		if (memptr_tmp == NULL) {
 			DHD_ERROR(("%s: Failed to allocate memory %d bytes\n", __FUNCTION__, MEMBLOCK));
 			goto err;
 		}
 	}
+#endif
 	if ((uint32)(uintptr)memblock % DHD_SDALIGN) {
 		memptr += (DHD_SDALIGN - ((uint32)(uintptr)memblock % DHD_SDALIGN));
 	}
@@ -2933,7 +2980,8 @@ dhdpcie_download_code_file(struct dhd_bus *bus, char *pfw_path)
 			goto err;
 		}
 
-		if (dhd_msg_level & DHD_TRACE_VAL) {
+#ifdef CHECK_DOWNLOAD_FW
+		if (bus->dhd->conf->fwchk) {
 			bcmerror = dhdpcie_bus_membytes(bus, FALSE, offset, memptr_tmp, len);
 			if (bcmerror) {
 				DHD_ERROR(("%s: error %d on reading %d membytes at 0x%08x\n",
@@ -2941,11 +2989,13 @@ dhdpcie_download_code_file(struct dhd_bus *bus, char *pfw_path)
 				goto err;
 			}
 			if (memcmp(memptr_tmp, memptr, len)) {
-				DHD_ERROR(("%s: Downloaded image is corrupted.\n", __FUNCTION__));
+				DHD_ERROR(("%s: Downloaded image is corrupted at 0x%08x\n", __FUNCTION__, offset));
+				bcmerror = BCME_ERROR;
 				goto err;
 			} else
 				DHD_INFO(("%s: Download, Upload and compare succeeded.\n", __FUNCTION__));
 		}
+#endif
 		offset += MEMBLOCK;
 
 		if (offset >= offset_end) {
@@ -2962,10 +3012,10 @@ dhdpcie_download_code_file(struct dhd_bus *bus, char *pfw_path)
 err:
 	if (memblock) {
 		MFREE(bus->dhd->osh, memblock, MEMBLOCK + DHD_SDALIGN);
-		if (dhd_msg_level & DHD_TRACE_VAL) {
-			if (memptr_tmp)
-				MFREE(bus->dhd->osh, memptr_tmp, MEMBLOCK + DHD_SDALIGN);
-		}
+#ifdef CHECK_DOWNLOAD_FW
+		if (memptr_tmp)
+			MFREE(bus->dhd->osh, memptr_tmp, MEMBLOCK + DHD_SDALIGN);
+#endif
 	}
 
 	if (imgbuf) {
@@ -3796,6 +3846,9 @@ dhdpcie_bus_membytes(dhd_bus_t *bus, bool write, ulong address, uint8 *data, uin
 	uint dsize;
 	int detect_endian_flag = 0x01;
 	bool little_endian;
+#ifdef DHD_BAR1_WINDOW_LESS_THAN_4MB
+	bool is_64bit_unaligned;
+#endif
 
 	if (write && bus->is_linkdown) {
 		DHD_ERROR(("%s: PCIe link was down\n", __FUNCTION__));
@@ -3807,6 +3860,11 @@ dhdpcie_bus_membytes(dhd_bus_t *bus, bool write, ulong address, uint8 *data, uin
 	}
 	/* Detect endianness. */
 	little_endian = *(char *)&detect_endian_flag;
+
+#ifdef DHD_BAR1_WINDOW_LESS_THAN_4MB
+	/* Check 64bit aligned or not. */
+	is_64bit_unaligned = (address & 0x7);
+#endif
 
 	/* In remap mode, adjust address beyond socram and redirect
 	 * to devram at SOCDEVRAM_BP_ADDR since remap address > orig_ramsize
@@ -3827,6 +3885,18 @@ dhdpcie_bus_membytes(dhd_bus_t *bus, bool write, ulong address, uint8 *data, uin
 		while (size) {
 #ifdef DHD_SUPPORT_64BIT
 			if (size >= sizeof(uint64) && little_endian &&	!(address % 8)) {
+#ifdef DHD_BAR1_WINDOW_LESS_THAN_4MB
+				if (unlikely(is_64bit_unaligned)) {
+					DHD_INFO(("%s: write unaligned %lx\n", __FUNCTION__, address));
+					dhdpcie_bus_wtcm32(bus, address, *((uint32 *)data));
+					data += 4;
+					size -= 4;
+					address += 4;
+					is_64bit_unaligned = (address & 0x7);
+					continue;
+				}
+				else
+#endif
 				dhdpcie_bus_wtcm64(bus, address, *((uint64 *)data));
 			}
 #else /* !DHD_SUPPORT_64BIT */
@@ -3850,6 +3920,18 @@ dhdpcie_bus_membytes(dhd_bus_t *bus, bool write, ulong address, uint8 *data, uin
 #ifdef DHD_SUPPORT_64BIT
 			if (size >= sizeof(uint64) && little_endian &&	!(address % 8))
 			{
+#ifdef DHD_BAR1_WINDOW_LESS_THAN_4MB
+				if (unlikely(is_64bit_unaligned)) {
+					DHD_INFO(("%s: read unaligned %lx\n", __FUNCTION__, address));
+					*(uint32 *)data = dhdpcie_bus_rtcm32(bus, address);
+					data += 4;
+					size -= 4;
+					address += 4;
+					is_64bit_unaligned = (address & 0x7);
+					continue;
+				}
+				else
+#endif
 				*(uint64 *)data = dhdpcie_bus_rtcm64(bus, address);
 			}
 #else /* !DHD_SUPPORT_64BIT */
@@ -4192,6 +4274,26 @@ dhdpcie_setbar1win(dhd_bus_t *bus, uint32 addr)
 	dhdpcie_os_setbar1win(bus, addr);
 }
 
+#ifdef DHD_BAR1_WINDOW_LESS_THAN_4MB
+static inline ulong dhd_bus_cmn_check_offset(dhd_bus_t *bus, ulong offset)
+{
+	uint new_bar1_wbase = 0;
+	ulong address = 0;
+
+	new_bar1_wbase = (uint)offset & bus->bar1_win_mask;
+	if (unlikely(bus->bar1_win_base != new_bar1_wbase)) {
+		bus->bar1_win_base = new_bar1_wbase;
+		dhdpcie_bus_cfg_set_bar1_win(bus, bus->bar1_win_base);
+		DHD_ERROR(("%s: offset=%lx, switch bar1_win_base to %x\n",
+			__FUNCTION__, offset, bus->bar1_win_base));
+	}
+
+	address = offset - bus->bar1_win_base;
+
+	return address;
+}
+#endif /* DHD_BAR1_WINDOW_LESS_THAN_4MB */
+
 /** 'offset' is a backplane address */
 void
 dhdpcie_bus_wtcm8(dhd_bus_t *bus, ulong offset, uint8 data)
@@ -4200,7 +4302,11 @@ dhdpcie_bus_wtcm8(dhd_bus_t *bus, ulong offset, uint8 data)
 		DHD_LOG_MEM(("%s: PCIe link was down\n", __FUNCTION__));
 		return;
 	} else {
+#ifdef DHD_BAR1_WINDOW_LESS_THAN_4MB
+		dhdpcie_os_wtcm8(bus, dhd_bus_cmn_check_offset(bus, offset), data);
+#else
 		dhdpcie_os_wtcm8(bus, offset, data);
+#endif
 	}
 }
 
@@ -4212,7 +4318,11 @@ dhdpcie_bus_rtcm8(dhd_bus_t *bus, ulong offset)
 		DHD_LOG_MEM(("%s: PCIe link was down\n", __FUNCTION__));
 		data = (uint8)-1;
 	} else {
+#ifdef DHD_BAR1_WINDOW_LESS_THAN_4MB
+		data = dhdpcie_os_rtcm8(bus, dhd_bus_cmn_check_offset(bus, offset));
+#else
 		data = dhdpcie_os_rtcm8(bus, offset);
+#endif
 	}
 	return data;
 }
@@ -4224,7 +4334,11 @@ dhdpcie_bus_wtcm32(dhd_bus_t *bus, ulong offset, uint32 data)
 		DHD_LOG_MEM(("%s: PCIe link was down\n", __FUNCTION__));
 		return;
 	} else {
+#ifdef DHD_BAR1_WINDOW_LESS_THAN_4MB
+		dhdpcie_os_wtcm32(bus, dhd_bus_cmn_check_offset(bus, offset), data);
+#else
 		dhdpcie_os_wtcm32(bus, offset, data);
+#endif
 	}
 }
 void
@@ -4234,7 +4348,11 @@ dhdpcie_bus_wtcm16(dhd_bus_t *bus, ulong offset, uint16 data)
 		DHD_LOG_MEM(("%s: PCIe link was down\n", __FUNCTION__));
 		return;
 	} else {
+#ifdef DHD_BAR1_WINDOW_LESS_THAN_4MB
+		dhdpcie_os_wtcm16(bus, dhd_bus_cmn_check_offset(bus, offset), data);
+#else
 		dhdpcie_os_wtcm16(bus, offset, data);
+#endif
 	}
 }
 #ifdef DHD_SUPPORT_64BIT
@@ -4245,7 +4363,11 @@ dhdpcie_bus_wtcm64(dhd_bus_t *bus, ulong offset, uint64 data)
 		DHD_LOG_MEM(("%s: PCIe link was down\n", __FUNCTION__));
 		return;
 	} else {
+#ifdef DHD_BAR1_WINDOW_LESS_THAN_4MB
+		dhdpcie_os_wtcm64(bus, dhd_bus_cmn_check_offset(bus, offset), data);
+#else
 		dhdpcie_os_wtcm64(bus, offset, data);
+#endif
 	}
 }
 #endif /* DHD_SUPPORT_64BIT */
@@ -4258,7 +4380,11 @@ dhdpcie_bus_rtcm16(dhd_bus_t *bus, ulong offset)
 		DHD_LOG_MEM(("%s: PCIe link was down\n", __FUNCTION__));
 		data = (uint16)-1;
 	} else {
+#ifdef DHD_BAR1_WINDOW_LESS_THAN_4MB
+		data = dhdpcie_os_rtcm16(bus, dhd_bus_cmn_check_offset(bus, offset));
+#else
 		data = dhdpcie_os_rtcm16(bus, offset);
+#endif
 	}
 	return data;
 }
@@ -4271,7 +4397,11 @@ dhdpcie_bus_rtcm32(dhd_bus_t *bus, ulong offset)
 		DHD_LOG_MEM(("%s: PCIe link was down\n", __FUNCTION__));
 		data = (uint32)-1;
 	} else {
+#ifdef DHD_BAR1_WINDOW_LESS_THAN_4MB
+		data = dhdpcie_os_rtcm32(bus, dhd_bus_cmn_check_offset(bus, offset));
+#else
 		data = dhdpcie_os_rtcm32(bus, offset);
+#endif
 	}
 	return data;
 }
@@ -4285,7 +4415,11 @@ dhdpcie_bus_rtcm64(dhd_bus_t *bus, ulong offset)
 		DHD_LOG_MEM(("%s: PCIe link was down\n", __FUNCTION__));
 		data = (uint64)-1;
 	} else {
+#ifdef DHD_BAR1_WINDOW_LESS_THAN_4MB
+		data = dhdpcie_os_rtcm64(bus, dhd_bus_cmn_check_offset(bus, offset));
+#else
 		data = dhdpcie_os_rtcm64(bus, offset);
+#endif
 	}
 	return data;
 }
@@ -4980,6 +5114,10 @@ dhd_bus_perform_flr(dhd_bus_t *bus, bool force_fail)
 	       DHD_ERROR(("Chip does not support FLR\n"));
 	       return BCME_UNSUPPORTED;
 	}
+
+#ifdef DHD_BAR1_WINDOW_LESS_THAN_4MB
+	return BCME_UNSUPPORTED;
+#endif
 
 	/* Save pcie config space */
 	DHD_INFO(("Save Pcie Config Space\n"));
@@ -6398,7 +6536,6 @@ dhdpcie_bus_suspend(struct dhd_bus *bus, bool state)
 				/* Enable back the intmask which was cleared in DPC
 				 * after getting D3_ACK.
 				 */
-				bus->resume_intr_enable_count++;
 
 				/* For Linux, Macos etc (otherthan NDIS) enable back the dongle
 				 * interrupts using intmask and host interrupts
@@ -6407,8 +6544,13 @@ dhdpcie_bus_suspend(struct dhd_bus *bus, bool state)
 				 */
 				/* Enable back interrupt using Intmask!! */
 				dhdpcie_bus_intr_enable(bus);
-				/* Enable back interrupt from Host side!! */
-				dhdpcie_enable_irq(bus);
+				if (!DHD_BUS_BUSY_CHECK_RPM_SUSPEND_IN_PROGRESS(bus->dhd)) {
+					/* Enable back interrupt from Host side!! */
+					if (dhdpcie_irq_disabled(bus)) {
+						dhdpcie_enable_irq(bus);
+						bus->resume_intr_enable_count++;
+					}
+				}
 
 				DHD_BUS_UNLOCK(bus->bus_lock, flags_bus);
 
@@ -6572,15 +6714,17 @@ dhdpcie_bus_suspend(struct dhd_bus *bus, bool state)
 		/* resume all interface network queue. */
 		dhd_bus_start_queue(bus);
 
-		/* TODO: for NDIS also we need to use enable_irq in future */
-		bus->resume_intr_enable_count++;
-
 		/* For Linux, Macos etc (otherthan NDIS) enable back the dongle interrupts
 		 * using intmask and host interrupts
 		 * which were disabled in the dhdpcie_bus_isr()->dhd_bus_handle_d3_ack().
 		 */
 		dhdpcie_bus_intr_enable(bus); /* Enable back interrupt using Intmask!! */
-		dhdpcie_enable_irq(bus); /* Enable back interrupt from Host side!! */
+		if (!DHD_BUS_BUSY_CHECK_RPM_RESUME_IN_PROGRESS(bus->dhd)) {
+			if (dhdpcie_irq_disabled(bus)) {
+				dhdpcie_enable_irq(bus); /* Enable back interrupt from Host side!! */
+				bus->resume_intr_enable_count++;
+			}
+		}
 
 		DHD_GENERAL_UNLOCK(bus->dhd, flags);
 
@@ -7953,11 +8097,18 @@ dhd_bus_dpc(struct dhd_bus *bus)
 #ifdef DHD_READ_INTSTATUS_IN_DPC
 INTR_ON:
 #endif /* DHD_READ_INTSTATUS_IN_DPC */
+#ifdef CHIP_INTR_CONTROL
+		dhdpcie_bus_intr_enable(bus); /* Enable back interrupt using Intmask!! */
 		bus->dpc_intr_enable_count++;
+#else
 		/* For Linux, Macos etc (otherthan NDIS) enable back the host interrupts
 		 * which has been disabled in the dhdpcie_bus_isr()
 		 */
-		 dhdpcie_enable_irq(bus); /* Enable back interrupt!! */
+		if ((dhdpcie_irq_disabled(bus)) && (!dhd_query_bus_erros(bus->dhd))) {
+			dhdpcie_enable_irq(bus); /* Enable back interrupt!! */
+			bus->dpc_intr_enable_count++;
+		}
+#endif /* HOST_INTR_CONTROL */
 		bus->dpc_exit_time = OSL_LOCALTIME_NS();
 	} else {
 		bus->resched_dpc_time = OSL_LOCALTIME_NS();

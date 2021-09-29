@@ -51,7 +51,7 @@ typedef enum monitor_states
 	MONITOR_STATE_INTERFACE_DELETED = 0x4
 } monitor_states_t;
 int dhd_add_monitor(const char *name, struct net_device **new_ndev);
-extern int dhd_start_xmit(struct sk_buff *skb, struct net_device *net);
+extern netdev_tx_t dhd_start_xmit(struct sk_buff *skb, struct net_device *net);
 int dhd_del_monitor(struct net_device *ndev);
 int dhd_monitor_init(void *dhd_pub);
 int dhd_monitor_uninit(void);
@@ -84,7 +84,7 @@ static struct net_device* lookup_real_netdev(const char *name);
 static monitor_interface* ndev_to_monif(struct net_device *ndev);
 static int dhd_mon_if_open(struct net_device *ndev);
 static int dhd_mon_if_stop(struct net_device *ndev);
-static int dhd_mon_if_subif_start_xmit(struct sk_buff *skb, struct net_device *ndev);
+static netdev_tx_t dhd_mon_if_subif_start_xmit(struct sk_buff *skb, struct net_device *ndev);
 static void dhd_mon_if_set_multicast_list(struct net_device *ndev);
 static int dhd_mon_if_change_mac(struct net_device *ndev, void *addr);
 
@@ -173,7 +173,7 @@ static int dhd_mon_if_stop(struct net_device *ndev)
 	return ret;
 }
 
-static int dhd_mon_if_subif_start_xmit(struct sk_buff *skb, struct net_device *ndev)
+static netdev_tx_t dhd_mon_if_subif_start_xmit(struct sk_buff *skb, struct net_device *ndev)
 {
 	int ret = 0;
 	int rtap_len;

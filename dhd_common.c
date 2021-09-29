@@ -141,6 +141,9 @@ int dhd_msg_level = DHD_ERROR_VAL | DHD_FWLOG_VAL;// | DHD_EVENT_VAL
 char fw_path2[MOD_PARAM_PATHLEN];
 extern bool softap_enabled;
 #endif // endif
+#ifdef PROP_TXSTATUS
+extern int disable_proptx;
+#endif /* PROP_TXSTATUS */
 
 #ifdef SHOW_LOGTRACE
 #define BYTES_AHEAD_NUM		10	/* address in map file is before these many bytes */
@@ -203,21 +206,22 @@ static int dngl_host_event(dhd_pub_t *dhdp, void *pktdata, bcm_dngl_event_msg_t 
 bool ap_cfg_running = FALSE;
 bool ap_fw_loaded = FALSE;
 
-/* Version string to report */
-#ifdef DHD_DEBUG
-#ifndef SRCBASE
-#define SRCBASE        "drivers/net/wireless/bcmdhd"
-#endif // endif
-#define DHD_COMPILED "\nCompiled in " SRCBASE
-#endif /* DHD_DEBUG */
+#ifdef WLEASYMESH
+extern int dhd_set_1905_almac(dhd_pub_t *dhdp, uint8 ifidx, uint8* ea, bool mcast);
+extern int dhd_get_1905_almac(dhd_pub_t *dhdp, uint8 ifidx, uint8* ea, bool mcast);
+#endif /* WLEASYMESH */
 
 #define CHIPID_MISMATCH	8
 
-#if defined(DHD_DEBUG)
-const char dhd_version[] = "Dongle Host Driver, version " EPI_VERSION_STR;
+#define DHD_VERSION "Dongle Host Driver, version " EPI_VERSION_STR "\n"
+
+#if defined(DHD_DEBUG) && defined(DHD_COMPILED)
+const char dhd_version[] = DHD_VERSION DHD_COMPILED " compiled on "
+			__DATE__ " at " __TIME__ "\n\0<TIMESTAMP>";
 #else
-const char dhd_version[] = "\nDongle Host Driver, version " EPI_VERSION_STR;
-#endif // endif
+const char dhd_version[] = DHD_VERSION;
+#endif /* DHD_DEBUG && DHD_COMPILED */
+
 char fw_version[FW_VER_STR_LEN] = "\0";
 char clm_version[CLM_VER_STR_LEN] = "\0";
 
@@ -321,6 +325,10 @@ enum {
 	IOV_RTT_GEOFENCE_TYPE_OVRD,
 #endif /* RTT_SUPPORT && WL_NAN */
 #endif /* RTT_GEOFENCE_CONT */
+#ifdef WLEASYMESH
+	IOV_1905_AL_UCAST,
+	IOV_1905_AL_MCAST,
+#endif /* WLEASYMESH */
 	IOV_LAST
 };
 
@@ -425,6 +433,10 @@ const bcm_iovar_t dhd_iovars[] = {
 	{"rtt_geofence_type_ovrd", IOV_RTT_GEOFENCE_TYPE_OVRD, (0), 0, IOVT_BOOL, 0},
 #endif /* RTT_SUPPORT && WL_NAN */
 #endif /* RTT_GEOFENCE_CONT */
+#ifdef WLEASYMESH
+	{"1905_al_ucast", IOV_1905_AL_UCAST, 0, 0, IOVT_BUFFER, ETHER_ADDR_LEN},
+	{"1905_al_mcast", IOV_1905_AL_MCAST, 0, 0, IOVT_BUFFER, ETHER_ADDR_LEN},
+#endif /* WLEASYMESH */
 	{NULL, 0, 0, 0, 0, 0 }
 };
 
@@ -1549,9 +1561,6 @@ dhd_doiovar(dhd_pub_t *dhd_pub, const bcm_iovar_t *vi, uint32 actionid, const ch
 		if (bus_api_rev_len)
 			bcm_strncat_s((char*)arg + dhd_ver_len, bus_api_rev_len, bus_api_revision,
 				bus_api_rev_len);
-#if defined(BCMSDIO) && defined(PKT_STATICS)
-		dhd_bus_clear_txpktstatics(dhd_pub->bus);
-#endif
 		break;
 
 	case IOV_GVAL(IOV_WLMSGLEVEL):
@@ -1594,9 +1603,6 @@ dhd_doiovar(dhd_pub_t *dhd_pub, const bcm_iovar_t *vi, uint32 actionid, const ch
 	case IOV_GVAL(IOV_MSGLEVEL):
 		int_val = (int32)dhd_msg_level;
 		bcopy(&int_val, arg, val_size);
-#if defined(BCMSDIO) && defined(PKT_STATICS)
-		dhd_bus_dump_txpktstatics(dhd_pub->bus);
-#endif
 		break;
 
 	case IOV_SVAL(IOV_MSGLEVEL):
@@ -1718,6 +1724,10 @@ dhd_doiovar(dhd_pub_t *dhd_pub, const bcm_iovar_t *vi, uint32 actionid, const ch
 		/* wlfc is already set as desired */
 		if (wlfc_enab == (int_val == 0 ? FALSE : TRUE))
 			goto exit;
+
+		if (int_val == TRUE && disable_proptx) {
+			disable_proptx = 0;
+		}
 
 		if (int_val == TRUE)
 			bcmerror = dhd_wlfc_init(dhd_pub);
@@ -2297,6 +2307,60 @@ dhd_doiovar(dhd_pub_t *dhd_pub, const bcm_iovar_t *vi, uint32 actionid, const ch
 	}
 #endif /* RTT_SUPPORT && WL_NAN */
 #endif /* RTT_GEOFENCE_CONT */
+#ifdef WLEASYMESH
+	case IOV_SVAL(IOV_1905_AL_UCAST): {
+		uint32  bssidx;
+		const char *val;
+		uint8 ea[6] = {0};
+		if (dhd_iovar_parse_bssidx(dhd_pub, (char *)name, &bssidx, &val) != BCME_OK) {
+			DHD_ERROR(("%s: 1905_al_ucast: bad parameter\n", __FUNCTION__));
+			bcmerror = BCME_BADARG;
+			break;
+		}
+		bcopy(val, ea, ETHER_ADDR_LEN);
+		printf("IOV_1905_AL_UCAST:" MACDBG "\n", MAC2STRDBG(ea));
+		bcmerror = dhd_set_1905_almac(dhd_pub, bssidx, ea, FALSE);
+		break;
+	}
+	case IOV_GVAL(IOV_1905_AL_UCAST): {
+		uint32  bssidx;
+		const char *val;
+		if (dhd_iovar_parse_bssidx(dhd_pub, (char *)name, &bssidx, &val) != BCME_OK) {
+			DHD_ERROR(("%s: 1905_al_ucast: bad parameter\n", __FUNCTION__));
+			bcmerror = BCME_BADARG;
+			break;
+		}
+
+		bcmerror = dhd_get_1905_almac(dhd_pub, bssidx, arg, FALSE);
+		break;
+	}
+	case IOV_SVAL(IOV_1905_AL_MCAST): {
+		uint32  bssidx;
+		const char *val;
+		uint8 ea[6] = {0};
+		if (dhd_iovar_parse_bssidx(dhd_pub, (char *)name, &bssidx, &val) != BCME_OK) {
+			DHD_ERROR(("%s: 1905_al_mcast: bad parameter\n", __FUNCTION__));
+			bcmerror = BCME_BADARG;
+			break;
+		}
+		bcopy(val, ea, ETHER_ADDR_LEN);
+		printf("IOV_1905_AL_MCAST:" MACDBG "\n", MAC2STRDBG(ea));
+		bcmerror = dhd_set_1905_almac(dhd_pub, bssidx, ea, TRUE);
+		break;
+	}
+	case IOV_GVAL(IOV_1905_AL_MCAST): {
+		uint32  bssidx;
+		const char *val;
+		if (dhd_iovar_parse_bssidx(dhd_pub, (char *)name, &bssidx, &val) != BCME_OK) {
+			DHD_ERROR(("%s: 1905_al_mcast: bad parameter\n", __FUNCTION__));
+			bcmerror = BCME_BADARG;
+			break;
+		}
+
+		bcmerror = dhd_get_1905_almac(dhd_pub, bssidx, arg, TRUE);
+		break;
+	}
+#endif /* WLEASYMESH */
 	default:
 		bcmerror = BCME_UNSUPPORTED;
 		break;

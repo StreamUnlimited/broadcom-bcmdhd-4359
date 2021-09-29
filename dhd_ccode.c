@@ -98,7 +98,7 @@ const char ccode_4356a2[] = \
 "GB/6 GD/2 GF/2 GP/2 GR/4 GT/1 GU/12 "\
 "HK/2 HR/4 HU/4 "\
 "ID/13 IE/5 IL/7 IN/28 IS/4 IT/4 "\
-"JO/3 JP/58 "\
+"JO/3 JP/45 "\
 "KH/2 KR/57 KW/5 KY/3 "\
 "LA/2 LB/5 LI/4 LK/1 LS/2 LT/4 LU/3 LV/4 "\
 "MA/2 MC/1 MD/2 ME/2 MK/2 MN/1 MO/2 MR/2 MT/4 MQ/2 MU/2 MV/3 MW/1 MX/20 MY/16 "\
@@ -247,7 +247,7 @@ dhd_ccode_map_country_list(dhd_pub_t *dhd, wl_country_t *cspec)
 	const char *ccode_list = NULL, *ccode_ww = NULL;
 	char *pch;
 
-	for (i=0;  i<sizeof(ccode_list_map)/sizeof(ccode_list_map[0]);  i++) {
+	for (i=0; i<sizeof(ccode_list_map)/sizeof(ccode_list_map[0]); i++) {
 		const ccode_list_map_t* row = &ccode_list_map[i];
 		if (row->chip == chip && row->chiprev == chiprev) {
 			ccode_list = row->ccode_list;

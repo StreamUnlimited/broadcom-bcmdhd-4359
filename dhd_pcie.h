@@ -246,6 +246,11 @@ typedef struct dhd_bus {
 	uint32		dma_rxoffset;
 	volatile char	*regs;		/* pci device memory va */
 	volatile char	*tcm;		/* pci device memory va */
+#ifdef DHD_BAR1_WINDOW_LESS_THAN_4MB
+	uint32      tcm_size;
+	uint32      bar1_win_base;
+	uint32      bar1_win_mask;
+#endif
 	osl_t		*osh;
 	uint32		nvram_csm;	/* Nvram checksum */
 	uint16		pollrate;
@@ -384,8 +389,14 @@ extern int dhdpcie_bus_register(void);
 extern void dhdpcie_bus_unregister(void);
 extern bool dhdpcie_chipmatch(uint16 vendor, uint16 device);
 
+#ifdef DHD_BAR1_WINDOW_LESS_THAN_4MB
+extern int dhdpcie_bus_attach(osl_t *osh, dhd_bus_t **bus_ptr,
+	volatile char *regs, volatile char *tcm, void *pci_dev, wifi_adapter_info_t *adapter,
+	uint32 tcm_size);
+#else
 extern int dhdpcie_bus_attach(osl_t *osh, dhd_bus_t **bus_ptr,
 	volatile char *regs, volatile char *tcm, void *pci_dev, wifi_adapter_info_t *adapter);
+#endif
 extern uint32 dhdpcie_bus_cfg_read_dword(struct dhd_bus *bus, uint32 addr, uint32 size);
 extern void dhdpcie_bus_cfg_write_dword(struct dhd_bus *bus, uint32 addr, uint32 size, uint32 data);
 extern void dhdpcie_bus_intr_enable(struct dhd_bus *bus);

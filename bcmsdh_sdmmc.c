@@ -38,11 +38,7 @@
 #include <sdiovar.h>	/* ioctl/iovars */
 
 #include <linux/mmc/core.h>
-#if (LINUX_VERSION_CODE <= KERNEL_VERSION(3, 0, 8))
-#include <drivers/mmc/core/host.h>
-#else
 #include <linux/mmc/host.h>
-#endif /* (LINUX_VERSION_CODE <= KERNEL_VERSION(3, 0, 0)) */
 #include <linux/mmc/card.h>
 #include <linux/mmc/sdio_func.h>
 #include <linux/mmc/sdio_ids.h>
@@ -57,7 +53,7 @@ extern volatile bool dhd_mmc_suspend;
 #endif // endif
 #include "bcmsdh_sdmmc.h"
 
-#if (LINUX_VERSION_CODE <= KERNEL_VERSION(3, 0, 0)) || (LINUX_VERSION_CODE >= \
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 3, 0)) || (LINUX_VERSION_CODE >= \
 	KERNEL_VERSION(4, 4, 0))
 static inline void
 mmc_host_clk_hold(struct mmc_host *host)
@@ -78,7 +74,7 @@ mmc_host_clk_rate(struct mmc_host *host)
 {
 	return host->ios.clock;
 }
-#endif /* LINUX_VERSION_CODE <= KERNEL_VERSION(3, 0, 0) */
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(3, 3, 0) */
 
 #ifndef BCMSDH_MODULE
 extern int sdio_function_init(void);
@@ -91,7 +87,11 @@ static void IRQHandlerF2(struct sdio_func *func);
 #endif /* !defined(OOB_INTR_ONLY) */
 static int sdioh_sdmmc_get_cisaddr(sdioh_info_t *sd, uint32 regaddr);
 #if defined(ENABLE_INSMOD_NO_FW_LOAD) && !defined(BUS_POWER_RESTORE)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 18, 0) && defined(MMC_SW_RESET)
+extern int mmc_sw_reset(struct mmc_host *host);
+#else
 extern int sdio_reset_comm(struct mmc_card *card);
+#endif
 #endif
 #ifdef GLOBAL_SDMMC_INSTANCE
 extern PBCMSDH_SDMMC_INSTANCE gInstance;
@@ -249,6 +249,9 @@ sdioh_attach(osl_t *osh, struct sdio_func *func)
 	}
 
 	sdio_claim_host(sd->func[2]);
+	if ((func->device == BCM43362_CHIP_ID || func->device == BCM4330_CHIP_ID) &&
+			sd_f2_blocksize > 128)
+		sd_f2_blocksize = 128;
 	sd->client_block_size[2] = sd_f2_blocksize;
 	printf("%s: set sd_f2_blocksize %d\n", __FUNCTION__, sd_f2_blocksize);
 	err_ret = sdio_set_block_size(sd->func[2], sd_f2_blocksize);
@@ -717,19 +720,22 @@ exit:
 }
 
 #if (defined(OOB_INTR_ONLY) && defined(HW_OOB)) || defined(FORCE_WOWLAN)
-
+#ifdef CUSTOMER_HW_AMLOGIC
+#include <linux/amlogic/aml_gpio_consumer.h>
+extern int wifi_irq_trigger_level(void);
+#endif
 SDIOH_API_RC
 sdioh_enable_hw_oob_intr(sdioh_info_t *sd, bool enable)
 {
 	SDIOH_API_RC status;
 	uint8 data;
 
-	if (enable)
-#ifdef HW_OOB_LOW_LEVEL
-		data = SDIO_SEPINT_MASK | SDIO_SEPINT_OE;
-#else
-		data = SDIO_SEPINT_MASK | SDIO_SEPINT_OE | SDIO_SEPINT_ACT_HI;
-#endif
+	if (enable) {
+		if (wifi_irq_trigger_level() == GPIO_IRQ_LOW)
+			data = SDIO_SEPINT_MASK | SDIO_SEPINT_OE;
+		else
+			data = SDIO_SEPINT_MASK | SDIO_SEPINT_OE | SDIO_SEPINT_ACT_HI;
+	}
 	else
 		data = SDIO_SEPINT_ACT_HI;	/* disable hw oob interrupt */
 
@@ -1595,6 +1601,30 @@ sdioh_sdmmc_card_regwrite(sdioh_info_t *sd, int func, uint32 regaddr, int regsiz
 }
 #endif /* NOTUSED */
 
+#if defined(ENABLE_INSMOD_NO_FW_LOAD) && !defined(BUS_POWER_RESTORE)
+static int sdio_sw_reset(sdioh_info_t *sd)
+{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 18, 0) && defined(MMC_SW_RESET)
+	struct mmc_host *host = sd->func[0]->card->host;
+#endif
+	int err = 0;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 18, 0) && defined(MMC_SW_RESET)
+	printf("%s: Enter\n", __FUNCTION__);
+	sdio_claim_host(sd->func[0]);
+	err = mmc_sw_reset(host);
+	sdio_release_host(sd->func[0]);
+#else
+	err = sdio_reset_comm(sd->func[0]->card);
+#endif
+
+	if (err)
+		sd_err(("%s Failed, error = %d\n", __FUNCTION__, err));
+
+	return err;
+}
+#endif
+
 int
 sdioh_start(sdioh_info_t *sd, int stage)
 {
@@ -1621,7 +1651,7 @@ sdioh_start(sdioh_info_t *sd, int stage)
 		   patch for it
 		*/
 #if defined(ENABLE_INSMOD_NO_FW_LOAD) && !defined(BUS_POWER_RESTORE)
-		if ((ret = sdio_reset_comm(sd->func[0]->card))) {
+		if ((ret = sdio_sw_reset(sd))) {
 			sd_err(("%s Failed, error = %d\n", __FUNCTION__, ret));
 			return ret;
 		} else
@@ -1749,21 +1779,19 @@ sdioh_gpio_init(sdioh_info_t *sd)
 uint
 sdmmc_get_clock_rate(sdioh_info_t *sd)
 {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0)) || (LINUX_VERSION_CODE < KERNEL_VERSION(3, 4, 0))
-	return 0;
-#else
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 3, 0)) || (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0))
 	struct sdio_func *sdio_func = sd->func[0];
 	struct mmc_host *host = sdio_func->card->host;
 	return mmc_host_clk_rate(host);
+#else
+	return 0;
 #endif
 }
 
 void
 sdmmc_set_clock_rate(sdioh_info_t *sd, uint hz)
 {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0)) || (LINUX_VERSION_CODE < KERNEL_VERSION(3, 4, 0))
-	return;
-#else
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 3, 0)) || (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0))
 	struct sdio_func *sdio_func = sd->func[0];
 	struct mmc_host *host = sdio_func->card->host;
 	struct mmc_ios *ios = &host->ios;
@@ -1783,6 +1811,8 @@ sdmmc_set_clock_rate(sdioh_info_t *sd, uint hz)
 	host->ops->set_ios(host, ios);
 	DHD_ERROR(("%s: After change: sd clock rate is %u\n", __FUNCTION__, ios->clock));
 	mmc_host_clk_release(host);
+#else
+	return;
 #endif
 }
 

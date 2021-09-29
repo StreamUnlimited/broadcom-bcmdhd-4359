@@ -221,10 +221,11 @@ wl_ext_set_probreq(struct net_device *dev, bool set)
 	return 0;
 }
 
-static int
-wl_ext_probreq_event(struct net_device *dev, struct genl_params *zconf,
-	wl_event_msg_t *e, void* data)
+void
+wl_ext_probreq_event(struct net_device *dev, void *argu,
+	const wl_event_msg_t *e, void *data)
 {
+	struct genl_params *zconf = (struct genl_params *)argu;
 	int i, ret = 0, num_ie = 0, totlen;
 	uint32 event_len = 0;
 	char *buf, *pbuf;
@@ -239,7 +240,7 @@ wl_ext_probreq_event(struct net_device *dev, struct genl_params *zconf,
 	buf = kzalloc(MAX_CUSTOM_PKT_LENGTH, GFP_KERNEL);
 	if (unlikely(!buf)) {
 		AGENL_ERROR(dev->name, "Could not allocate buf\n");
-		return -ENOMEM;
+		return;
 	}
 
 	// copy mgmt header
@@ -303,7 +304,7 @@ wl_ext_probreq_event(struct net_device *dev, struct genl_params *zconf,
 
 	if(buf)
 		kfree(buf);
-	return ret;
+	return;
 }
 #endif
 

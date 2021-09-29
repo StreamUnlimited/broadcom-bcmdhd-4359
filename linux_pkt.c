@@ -257,74 +257,6 @@ linux_pktget(osl_t *osh, uint len)
 	return ((void*) skb);
 }
 
-void BCMFASTPATH
-#ifdef BCM_OBJECT_TRACE
-linux_pktfree_irq(osl_t *osh, void *p, bool send, int line, const char *caller)
-#else
-linux_pktfree_irq(osl_t *osh, void *p, bool send)
-#endif /* BCM_OBJECT_TRACE */
-{
-	struct sk_buff *skb, *nskb;
-	if (osh == NULL)
-		return;
-
-	skb = (struct sk_buff*) p;
-
-	if (send) {
-		if (osh->pub.tx_fn) {
-			osh->pub.tx_fn(osh->pub.tx_ctx, p, 0);
-		}
-	} else {
-		if (osh->pub.rx_fn) {
-			osh->pub.rx_fn(osh->pub.rx_ctx, p);
-		}
-	}
-
-	PKTDBG_TRACE(osh, (void *) skb, PKTLIST_PKTFREE);
-
-#if defined(CONFIG_DHD_USE_STATIC_BUF) && defined(DHD_USE_STATIC_CTRLBUF)
-	if (skb && (skb->mac_len == PREALLOC_USED_MAGIC)) {
-		printk("%s: pkt %p is from static pool\n",
-			__FUNCTION__, p);
-		dump_stack();
-		return;
-	}
-
-	if (skb && (skb->mac_len == PREALLOC_FREE_MAGIC)) {
-		printk("%s: pkt %p is from static pool and not in used\n",
-			__FUNCTION__, p);
-		dump_stack();
-		return;
-	}
-#endif /* CONFIG_DHD_USE_STATIC_BUF && DHD_USE_STATIC_CTRLBUF */
-
-	/* perversion: we use skb->next to chain multi-skb packets */
-	while (skb) {
-		nskb = skb->next;
-		skb->next = NULL;
-
-#ifdef BCM_OBJECT_TRACE
-		bcm_object_trace_opr(skb, BCM_OBJDBG_REMOVE, caller, line);
-#endif /* BCM_OBJECT_TRACE */
-
-		{
-			if (skb->destructor || irqs_disabled()) {
-				/* cannot kfree_skb() on hard IRQ (net/core/skbuff.c) if
-				 * destructor exists
-				 */
-				dev_kfree_skb_any(skb);
-			} else {
-				/* can free immediately (even in_irq()) if destructor
-				 * does not exist
-				 */
-				dev_kfree_skb(skb);
-			}
-		}
-		atomic_dec(&osh->cmn->pktalloced);
-		skb = nskb;
-	}
-}
-
 /* Free the driver packet. Free the tag if present */
 void BCMFASTPATH
 #ifdef BCM_OBJECT_TRACE
@@ -377,7 +309,7 @@ linux_pktfree(osl_t *osh, void *p, bool send)
 #endif /* BCM_OBJECT_TRACE */
 
 		{
-			if (skb->destructor) {
+			if (skb->destructor || irqs_disabled()) {
 				/* cannot kfree_skb() on hard IRQ (net/core/skbuff.c) if
 				 * destructor exists
 				 */
