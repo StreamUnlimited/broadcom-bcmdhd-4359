@@ -1,7 +1,7 @@
 /*
  * Packet dump helper functions
  *
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -17,14 +17,10 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
- *
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd_linux_pktdump.c 820929 2019-05-21 14:09:11Z $
+ * $Id$
  */
 
 #include <typedefs.h>
@@ -45,8 +41,8 @@
 #include <dhd_config.h>
 #include <wl_android.h>
 
-#define DHD_PKTDUMP(arg)	printk arg
-#define DHD_PKTDUMP_MEM(arg)	printk arg
+#define DHD_PKTDUMP(arg)	printf arg
+#define DHD_PKTDUMP_MEM(arg)	printf arg
 #define PACKED_STRUCT __attribute__ ((packed))
 
 #define EAPOL_HDR_LEN		4
@@ -204,12 +200,12 @@ static const char tx_pktfate[][30] = {
 	do { \
 		if (dump_msg_level & DUMP_EAPOL_VAL) { \
 			if (tx) { \
-				DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] 802_1X " x " [TX] : (%s) %s (%s)"TXFATE_FMT"\n", \
+				DHD_PKTDUMP(("[%s] 802_1X " x " [TX] : (%s) %s (%s)"TXFATE_FMT"\n", \
 					ifname, ## args, \
 					tx?seabuf:deabuf, tx?"->":"<-", tx?deabuf:seabuf, \
 					TX_PKTHASH(pkthash), TX_FATE(pktfate))); \
 			} else { \
-				DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] 802_1X " x " [RX] : (%s) %s (%s)\n", \
+				DHD_PKTDUMP(("[%s] 802_1X " x " [RX] : (%s) %s (%s)\n", \
 					ifname, ## args, \
 					tx?seabuf:deabuf, tx?"->":"<-", tx?deabuf:seabuf)); \
 			} \
@@ -220,12 +216,12 @@ static const char tx_pktfate[][30] = {
 	do { \
 		if (dump_msg_level & DUMP_EAPOL_VAL) { \
 			if (tx) { \
-				DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] 802_1X " x " [TX] : (%s) %s (%s)"DBGREPLAY TXFATE_FMT"\n", \
+				DHD_PKTDUMP(("[%s] 802_1X " x " [TX] : (%s) %s (%s)"DBGREPLAY TXFATE_FMT"\n", \
 					ifname, ## args, \
 					tx?seabuf:deabuf, tx?"->":"<-", tx?deabuf:seabuf, \
 					REPLAY_FMT(eap_key), TX_PKTHASH(pkthash), TX_FATE(pktfate))); \
 			} else { \
-				DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] 802_1X " x " [RX] : (%s) %s (%s)"DBGREPLAY"\n", \
+				DHD_PKTDUMP(("[%s] 802_1X " x " [RX] : (%s) %s (%s)"DBGREPLAY"\n", \
 					ifname, ## args, \
 					tx?seabuf:deabuf, tx?"->":"<-", tx?deabuf:seabuf, \
 					REPLAY_FMT(eap_key))); \
@@ -237,14 +233,14 @@ static const char tx_pktfate[][30] = {
 	do { \
 		if (dump_msg_level & DUMP_EAPOL_VAL) { \
 			if (tx) { \
-				DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] 802_1X " x " [TX] : (%s) %s (%s) " \
+				DHD_PKTDUMP(("[%s] 802_1X " x " [TX] : (%s) %s (%s) " \
 					"ver %d, type %d"TXFATE_FMT"\n", \
 					ifname, ## args, \
 					tx?seabuf:deabuf, tx?"->":"<-", tx?deabuf:seabuf, \
 					eapol_hdr->version, eapol_hdr->type, \
 					TX_PKTHASH(pkthash), TX_FATE(pktfate))); \
 			} else { \
-				DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] 802_1X " x " [RX] : (%s) %s (%s) " \
+				DHD_PKTDUMP(("[%s] 802_1X " x " [RX] : (%s) %s (%s) " \
 					"ver %d, type %d\n", \
 					ifname, ## args, \
 					tx?seabuf:deabuf, tx?"->":"<-", tx?deabuf:seabuf, \
@@ -257,7 +253,7 @@ static const char tx_pktfate[][30] = {
 	do { \
 		if (dump_msg_level & DUMP_EAPOL_VAL) { \
 			if (tx) { \
-				DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] 802_1X " x " [TX] : (%s) %s (%s) " \
+				DHD_PKTDUMP(("[%s] 802_1X " x " [TX] : (%s) %s (%s) " \
 					"ver %d type %d keytype %d keyinfo 0x%02X"TXFATE_FMT"\n", \
 					ifname, ## args, \
 					tx?seabuf:deabuf, tx?"->":"<-", tx?deabuf:seabuf, \
@@ -265,7 +261,7 @@ static const char tx_pktfate[][30] = {
 					(uint32)hton16(eap_key->key_info), \
 					TX_PKTHASH(pkthash), TX_FATE(pktfate))); \
 			} else { \
-				DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] 802_1X " x " [RX] : (%s) %s (%s) " \
+				DHD_PKTDUMP(("[%s] 802_1X " x " [RX] : (%s) %s (%s) " \
 					"ver %d type %d keytype %d keyinfo 0x%02X\n", \
 					ifname, ## args, \
 					tx?seabuf:deabuf, tx?"->":"<-", tx?deabuf:seabuf, \
@@ -274,6 +270,8 @@ static const char tx_pktfate[][30] = {
 			} \
 		} \
 	} while (0)
+
+#define UDP_PORT_DNS	53	/* UDP DNS port */
 
 /* EAPOL header */
 typedef struct eapol_header {
@@ -316,6 +314,11 @@ typedef struct eapol_key_hdr {
 	uint16 data_len;			/* Key Data Length */
 	uint8 data[WPA_KEY_DATA_LEN];		/* Key data */
 } PACKED_STRUCT eapol_key_hdr_t;
+
+typedef struct hdr_fmt {
+	struct ipv4_hdr iph;
+	struct bcmudp_hdr udph;
+} PACKED_STRUCT hdr_fmt_t;
 
 msg_eapol_t
 dhd_is_4way_msg(uint8 *pktdata)
@@ -410,19 +413,31 @@ dhd_dump_pkt(dhd_pub_t *dhdp, int ifidx, uint8 *pktdata, uint32 pktlen,
 		return;
 	}
 
+#if defined(BCMPCIE) && defined(DHD_PKT_LOGGING)
+	if (tx && !pkthash && !pktfate) {
+		return;
+	}
+#endif /* BCMPCIE && DHD_PKT_LOGGING */
+
 	eh = (struct ether_header *)pktdata;
 	ether_type = ntoh16(eh->ether_type);
 	if (ether_type == ETHER_TYPE_802_1X) {
 		dhd_dump_eapol_message(dhdp, ifidx, pktdata, pktlen,
 			tx, pkthash, pktfate);
 	}
-	if (ntoh16(eh->ether_type) == ETHER_TYPE_IP) {
-		dhd_dhcp_dump(dhdp, ifidx, pktdata, tx, pkthash, pktfate);
-		dhd_icmp_dump(dhdp, ifidx, pktdata, tx, pkthash, pktfate);
-		dhd_dns_dump(dhdp, ifidx, pktdata, tx, pkthash, pktfate);
+	if (ether_type == ETHER_TYPE_IP) {
+		if (dhd_check_dhcp(pktdata)) {
+			dhd_dhcp_dump(dhdp, ifidx, pktdata, tx, pkthash, pktfate);
+		} else if (dhd_check_icmp(pktdata)) {
+			dhd_icmp_dump(dhdp, ifidx, pktdata, tx, pkthash, pktfate);
+		} else if (dhd_check_dns(pktdata)) {
+			dhd_dns_dump(dhdp, ifidx, pktdata, tx, pkthash, pktfate);
+		}
 	}
-	if (ntoh16(eh->ether_type) == ETHER_TYPE_ARP) {
-		dhd_arp_dump(dhdp, ifidx, pktdata, tx, pkthash, pktfate);
+	if (ether_type == ETHER_TYPE_ARP) {
+		if (dhd_check_arp(pktdata, ether_type)) {
+			dhd_arp_dump(dhdp, ifidx, pktdata, tx, pkthash, pktfate);
+		}
 	}
 	dhd_trx_pkt_dump(dhdp, ifidx, pktdata, pktlen, tx);
 }
@@ -658,57 +673,80 @@ dhd_dump_wsc_message(dhd_pub_t *dhd, int ifidx, uint8 *pktdata,
 		if (msg && msglen) {
 			switch (*msg) {
 			case WSC_MSG_M1:
-				wl_ext_update_eapol_status(dhd, ifidx, EAPOL_STATUS_WPS_M1);
+#ifdef WL_EXT_IAPSTA
+				wl_ext_update_conn_state(dhd, ifidx, CONN_STATE_WPS_M1);
+#endif
 				DHD_STATLOG_DATA(dhd, ST(WPS_M1), ifidx, tx, cond);
 				EAP_PRINT("EAP Packet, WPS M1");
 				break;
 			case WSC_MSG_M2:
-				wl_ext_update_eapol_status(dhd, ifidx, EAPOL_STATUS_WPS_M2);
+#ifdef WL_EXT_IAPSTA
+				wl_ext_update_conn_state(dhd, ifidx, CONN_STATE_WPS_M2);
+#endif
 				DHD_STATLOG_DATA(dhd, ST(WPS_M2), ifidx, tx, cond);
 				EAP_PRINT("EAP Packet, WPS M2");
 				break;
 			case WSC_MSG_M3:
-				wl_ext_update_eapol_status(dhd, ifidx, EAPOL_STATUS_WPS_M3);
+#ifdef WL_EXT_IAPSTA
+				wl_ext_update_conn_state(dhd, ifidx, CONN_STATE_WPS_M3);
+#endif
 				DHD_STATLOG_DATA(dhd, ST(WPS_M3), ifidx, tx, cond);
 				EAP_PRINT("EAP Packet, WPS M3");
 				break;
 			case WSC_MSG_M4:
-				wl_ext_update_eapol_status(dhd, ifidx, EAPOL_STATUS_WPS_M4);
+#ifdef WL_EXT_IAPSTA
+				wl_ext_update_conn_state(dhd, ifidx, CONN_STATE_WPS_M4);
+#endif
 				DHD_STATLOG_DATA(dhd, ST(WPS_M4), ifidx, tx, cond);
 				EAP_PRINT("EAP Packet, WPS M4");
 				break;
 			case WSC_MSG_M5:
-				wl_ext_update_eapol_status(dhd, ifidx, EAPOL_STATUS_WPS_M5);
+#ifdef WL_EXT_IAPSTA
+				wl_ext_update_conn_state(dhd, ifidx, CONN_STATE_WPS_M5);
+#endif
 				DHD_STATLOG_DATA(dhd, ST(WPS_M5), ifidx, tx, cond);
 				EAP_PRINT("EAP Packet, WPS M5");
 				break;
 			case WSC_MSG_M6:
-				wl_ext_update_eapol_status(dhd, ifidx, EAPOL_STATUS_WPS_M6);
+#ifdef WL_EXT_IAPSTA
+				wl_ext_update_conn_state(dhd, ifidx, CONN_STATE_WPS_M6);
+#endif
 				DHD_STATLOG_DATA(dhd, ST(WPS_M6), ifidx, tx, cond);
 				EAP_PRINT("EAP Packet, WPS M6");
 				break;
 			case WSC_MSG_M7:
-				wl_ext_update_eapol_status(dhd, ifidx, EAPOL_STATUS_WPS_M7);
+#ifdef WL_EXT_IAPSTA
+				wl_ext_update_conn_state(dhd, ifidx, CONN_STATE_WPS_M7);
+#endif
 				DHD_STATLOG_DATA(dhd, ST(WPS_M7), ifidx, tx, cond);
 				EAP_PRINT("EAP Packet, WPS M7");
 				break;
 			case WSC_MSG_M8:
-				wl_ext_update_eapol_status(dhd, ifidx, EAPOL_STATUS_WPS_M8);
+#ifdef WL_EXT_IAPSTA
+				wl_ext_update_conn_state(dhd, ifidx, CONN_STATE_WPS_M8);
+#endif
 				DHD_STATLOG_DATA(dhd, ST(WPS_M8), ifidx, tx, cond);
 				EAP_PRINT("EAP Packet, WPS M8");
 				break;
 			default:
+				EAP_PRINT("EAP Packet, WPS MSG TYPE %d", *msg);
 				break;
 			}
 		}
 	} else if (eap_wsc->opcode == WSC_OPCODE_START) {
-		wl_ext_update_eapol_status(dhd, ifidx, EAPOL_STATUS_WSC_START);
+#ifdef WL_EXT_IAPSTA
+		wl_ext_update_conn_state(dhd, ifidx, CONN_STATE_WSC_START);
+#endif
 		DHD_STATLOG_DATA(dhd, ST(WSC_START), ifidx, tx, cond);
 		EAP_PRINT("EAP Packet, WSC Start");
 	} else if (eap_wsc->opcode == WSC_OPCODE_DONE) {
-		wl_ext_update_eapol_status(dhd, ifidx, EAPOL_STATUS_WSC_DONE);
+#ifdef WL_EXT_IAPSTA
+		wl_ext_update_conn_state(dhd, ifidx, CONN_STATE_WSC_DONE);
+#endif
 		DHD_STATLOG_DATA(dhd, ST(WSC_DONE), ifidx, tx, cond);
 		EAP_PRINT("EAP Packet, WSC Done");
+	} else {
+		EAP_PRINT("EAP Packet, WSC opcode=%d", eap_wsc->opcode);
 	}
 }
 
@@ -742,11 +780,15 @@ dhd_dump_eap_packet(dhd_pub_t *dhd, int ifidx, uint8 *pktdata,
 		switch (eap_hdr->type) {
 		case EAP_TYPE_IDENT:
 			if (isreq) {
-				wl_ext_update_eapol_status(dhd, ifidx, EAPOL_STATUS_REQID);
+#ifdef WL_EXT_IAPSTA
+				wl_ext_update_conn_state(dhd, ifidx, CONN_STATE_REQID);
+#endif
 				DHD_STATLOG_DATA(dhd, ST(EAP_REQ_IDENTITY), ifidx, tx, cond);
 				EAP_PRINT("EAP Packet, Request, Identity");
 			} else {
-				wl_ext_update_eapol_status(dhd, ifidx, EAPOL_STATUS_RSPID);
+#ifdef WL_EXT_IAPSTA
+				wl_ext_update_conn_state(dhd, ifidx, CONN_STATE_RSPID);
+#endif
 				DHD_STATLOG_DATA(dhd, ST(EAP_RESP_IDENTITY), ifidx, tx, cond);
 				EAP_PRINT("EAP Packet, Response, Identity");
 			}
@@ -828,6 +870,7 @@ dhd_dump_eap_packet(dhd_pub_t *dhd, int ifidx, uint8 *pktdata,
 				pkthash, pktfate);
 			break;
 		default:
+			EAP_PRINT("EAP Packet, EAP TYPE %d", eap_hdr->type);
 			break;
 		}
 	} else if (eap_hdr->code == EAP_CODE_SUCCESS) {
@@ -836,6 +879,8 @@ dhd_dump_eap_packet(dhd_pub_t *dhd, int ifidx, uint8 *pktdata,
 	} else if (eap_hdr->code == EAP_CODE_FAILURE) {
 		DHD_STATLOG_DATA(dhd, ST(EAP_FAILURE), ifidx, tx, cond);
 		EAP_PRINT("EAP Packet, Failure");
+	} else {
+		EAP_PRINT("EAP Packet, EAP CODE %d", eap_hdr->code);
 	}
 }
 
@@ -872,32 +917,44 @@ dhd_dump_eapol_4way_message(dhd_pub_t *dhd, int ifidx, uint8 *pktdata, bool tx,
 
 	switch (type) {
 	case EAPOL_4WAY_M1:
-		wl_ext_update_eapol_status(dhd, ifidx, EAPOL_STATUS_4WAY_M1);
+#ifdef WL_EXT_IAPSTA
+		wl_ext_update_conn_state(dhd, ifidx, CONN_STATE_4WAY_M1);
+#endif
 		DHD_STATLOG_DATA(dhd, ST(EAPOL_M1), ifidx, tx, cond);
 		EAP_PRINT("EAPOL Packet, 4-way handshake, M1");
 		break;
 	case EAPOL_4WAY_M2:
-		wl_ext_update_eapol_status(dhd, ifidx, EAPOL_STATUS_4WAY_M2);
+#ifdef WL_EXT_IAPSTA
+		wl_ext_update_conn_state(dhd, ifidx, CONN_STATE_4WAY_M2);
+#endif
 		DHD_STATLOG_DATA(dhd, ST(EAPOL_M2), ifidx, tx, cond);
 		EAP_PRINT("EAPOL Packet, 4-way handshake, M2");
 		break;
 	case EAPOL_4WAY_M3:
-		wl_ext_update_eapol_status(dhd, ifidx, EAPOL_STATUS_4WAY_M3);
+#ifdef WL_EXT_IAPSTA
+		wl_ext_update_conn_state(dhd, ifidx, CONN_STATE_4WAY_M3);
+#endif
 		DHD_STATLOG_DATA(dhd, ST(EAPOL_M3), ifidx, tx, cond);
 		EAP_PRINT("EAPOL Packet, 4-way handshake, M3");
 		break;
 	case EAPOL_4WAY_M4:
-		wl_ext_update_eapol_status(dhd, ifidx, EAPOL_STATUS_4WAY_M4);
+#ifdef WL_EXT_IAPSTA
+		wl_ext_update_conn_state(dhd, ifidx, CONN_STATE_4WAY_M4);
+#endif
 		DHD_STATLOG_DATA(dhd, ST(EAPOL_M4), ifidx, tx, cond);
 		EAP_PRINT("EAPOL Packet, 4-way handshake, M4");
 		break;
 	case EAPOL_GROUPKEY_M1:
-		wl_ext_update_eapol_status(dhd, ifidx, EAPOL_STATUS_GROUPKEY_M1);
+#ifdef WL_EXT_IAPSTA
+		wl_ext_update_conn_state(dhd, ifidx, CONN_STATE_GROUPKEY_M1);
+#endif
 		DHD_STATLOG_DATA(dhd, ST(EAPOL_GROUPKEY_M1), ifidx, tx, cond);
 		EAP_PRINT_REPLAY("EAPOL Packet, GROUP Key handshake, M1");
 		break;
 	case EAPOL_GROUPKEY_M2:
-		wl_ext_update_eapol_status(dhd, ifidx, EAPOL_STATUS_GROUPKEY_M2);
+#ifdef WL_EXT_IAPSTA
+		wl_ext_update_conn_state(dhd, ifidx, CONN_STATE_GROUPKEY_M2);
+#endif
 		DHD_STATLOG_DATA(dhd, ST(EAPOL_GROUPKEY_M2), ifidx, tx, cond);
 		EAP_PRINT_REPLAY("EAPOL Packet, GROUP Key handshake, M2");
 		if (ifidx == 0 && tx && pktfate) {
@@ -949,35 +1006,52 @@ dhd_dump_eapol_message(dhd_pub_t *dhd, int ifidx, uint8 *pktdata,
 }
 #endif /* DHD_8021X_DUMP */
 
-#ifdef DHD_DHCP_DUMP
+bool
+dhd_check_ip_prot(uint8 *pktdata, uint16 ether_type)
+{
+	hdr_fmt_t *b = (hdr_fmt_t *)&pktdata[ETHER_HDR_LEN];
+	struct ipv4_hdr *iph = &b->iph;
+
+	/* check IP header */
+	if ((ether_type != ETHER_TYPE_IP) ||
+		(IPV4_HLEN(iph) < IPV4_HLEN_MIN) ||
+		(IP_VER(iph) != IP_VER_4)) {
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+bool
+dhd_check_dhcp(uint8 *pktdata)
+{
+	hdr_fmt_t *b = (hdr_fmt_t *)&pktdata[ETHER_HDR_LEN];
+	struct ipv4_hdr *iph = &b->iph;
+
+	if (IPV4_PROT(iph) != IP_PROT_UDP) {
+		return FALSE;
+	}
+
+	/* check UDP port for bootp (67, 68) */
+	if (b->udph.src_port != htons(DHCP_PORT_SERVER) &&
+	        b->udph.src_port != htons(DHCP_PORT_CLIENT) &&
+	        b->udph.dst_port != htons(DHCP_PORT_SERVER) &&
+	        b->udph.dst_port != htons(DHCP_PORT_CLIENT)) {
+	        return FALSE;
+	}
+
+	/* check header length */
+	if (ntohs(iph->tot_len) < ntohs(b->udph.len) + sizeof(struct bcmudp_hdr)) {
+	        return FALSE;
+	}
+	return TRUE;
+}
+
 #define BOOTP_CHADDR_LEN		16
 #define BOOTP_SNAME_LEN			64
 #define BOOTP_FILE_LEN			128
 #define BOOTP_MIN_DHCP_OPT_LEN		312
 #define BOOTP_MAGIC_COOKIE_LEN		4
-
-#define DHCP_MSGTYPE_DISCOVER		1
-#define DHCP_MSGTYPE_OFFER		2
-#define DHCP_MSGTYPE_REQUEST		3
-#define DHCP_MSGTYPE_DECLINE		4
-#define DHCP_MSGTYPE_ACK		5
-#define DHCP_MSGTYPE_NAK		6
-#define DHCP_MSGTYPE_RELEASE		7
-#define DHCP_MSGTYPE_INFORM		8
-
-#define DHCP_PRINT(str) \
-	do { \
-		if (tx) { \
-			DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] " str " %8s[%8s] [TX] : %s(%s) %s %s(%s)"TXFATE_FMT"\n", \
-				ifname, typestr, opstr, tx?sabuf:dabuf, tx?seabuf:deabuf, \
-				tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf, \
-				TX_PKTHASH(pkthash), TX_FATE(pktfate))); \
-		} else { \
-			DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] " str " %8s[%8s] [RX] : %s(%s) %s %s(%s)\n", \
-				ifname, typestr, opstr, tx?sabuf:dabuf, tx?seabuf:deabuf, \
-				tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf)); \
-		} \
-	} while (0)
 
 typedef struct bootp_fmt {
 	struct ipv4_hdr iph;
@@ -998,8 +1072,32 @@ typedef struct bootp_fmt {
 	uint8 file_name[BOOTP_FILE_LEN];
 	uint8 options[BOOTP_MIN_DHCP_OPT_LEN];
 } PACKED_STRUCT bootp_fmt_t;
-
 static const uint8 bootp_magic_cookie[4] = { 99, 130, 83, 99 };
+
+#ifdef DHD_DHCP_DUMP
+#define DHCP_MSGTYPE_DISCOVER		1
+#define DHCP_MSGTYPE_OFFER		2
+#define DHCP_MSGTYPE_REQUEST		3
+#define DHCP_MSGTYPE_DECLINE		4
+#define DHCP_MSGTYPE_ACK		5
+#define DHCP_MSGTYPE_NAK		6
+#define DHCP_MSGTYPE_RELEASE		7
+#define DHCP_MSGTYPE_INFORM		8
+
+#define DHCP_PRINT(str) \
+	do { \
+		if (tx) { \
+			DHD_PKTDUMP(("[%s] " str " %8s[%8s] [TX] : %s(%s) %s %s(%s)"TXFATE_FMT"\n", \
+				ifname, typestr, opstr, tx?sabuf:dabuf, tx?seabuf:deabuf, \
+				tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf, \
+				TX_PKTHASH(pkthash), TX_FATE(pktfate))); \
+		} else { \
+			DHD_PKTDUMP(("[%s] " str " %8s[%8s] [RX] : %s(%s) %s %s(%s)\n", \
+				ifname, typestr, opstr, tx?sabuf:dabuf, tx?seabuf:deabuf, \
+				tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf)); \
+		} \
+	} while (0)
+
 static char dhcp_ops[][10] = {
 	"NA", "REQUEST", "REPLY"
 };
@@ -1007,11 +1105,13 @@ static char dhcp_types[][10] = {
 	"NA", "DISCOVER", "OFFER", "REQUEST", "DECLINE", "ACK", "NAK", "RELEASE", "INFORM"
 };
 
+#ifdef DHD_STATUS_LOGGING
 static const int dhcp_types_stat[9] = {
 	ST(INVALID), ST(DHCP_DISCOVER), ST(DHCP_OFFER), ST(DHCP_REQUEST),
 	ST(DHCP_DECLINE), ST(DHCP_ACK), ST(DHCP_NAK), ST(DHCP_RELEASE),
 	ST(DHCP_INFORM)
 };
+#endif /* DHD_STATUS_LOGGING */
 
 void
 dhd_dhcp_dump(dhd_pub_t *dhdp, int ifidx, uint8 *pktdata, bool tx,
@@ -1029,26 +1129,6 @@ dhd_dhcp_dump(dhd_pub_t *dhdp, int ifidx, uint8 *pktdata, bool tx,
 
 	if (!(dump_msg_level & DUMP_DHCP_VAL))
 		return;
-
-	/* check IP header */
-	if ((IPV4_HLEN(iph) < IPV4_HLEN_MIN) ||
-		IP_VER(iph) != IP_VER_4 ||
-		IPV4_PROT(iph) != IP_PROT_UDP) {
-		return;
-	}
-
-	/* check UDP port for bootp (67, 68) */
-	if (b->udph.src_port != htons(DHCP_PORT_SERVER) &&
-		b->udph.src_port != htons(DHCP_PORT_CLIENT) &&
-		b->udph.dst_port != htons(DHCP_PORT_SERVER) &&
-		b->udph.dst_port != htons(DHCP_PORT_CLIENT)) {
-		return;
-	}
-
-	/* check header length */
-	if (ntohs(iph->tot_len) < ntohs(b->udph.len) + sizeof(struct bcmudp_hdr)) {
-		return;
-	}
 	bcm_ip_ntoa((struct ipv4_addr *)iph->src_ip, sabuf);
 	bcm_ip_ntoa((struct ipv4_addr *)iph->dst_ip, dabuf);
 	bcm_ether_ntoa((struct ether_addr *)pktdata, deabuf);
@@ -1089,6 +1169,23 @@ dhd_dhcp_dump(dhd_pub_t *dhdp, int ifidx, uint8 *pktdata, bool tx,
 }
 #endif /* DHD_DHCP_DUMP */
 
+bool
+dhd_check_icmp(uint8 *pktdata)
+{
+	uint8 *pkt = (uint8 *)&pktdata[ETHER_HDR_LEN];
+	struct ipv4_hdr *iph = (struct ipv4_hdr *)pkt;
+
+	if (IPV4_PROT(iph) != IP_PROT_ICMP) {
+		return FALSE;
+	}
+
+	/* check header length */
+	if (ntohs(iph->tot_len) - IPV4_HLEN(iph) < sizeof(struct bcmicmp_hdr)) {
+		return FALSE;
+	}
+	return TRUE;
+}
+
 #ifdef DHD_ICMP_DUMP
 #define ICMP_TYPE_DEST_UNREACH		3
 #define ICMP_ECHO_SEQ_OFFSET		6
@@ -1096,12 +1193,12 @@ dhd_dhcp_dump(dhd_pub_t *dhdp, int ifidx, uint8 *pktdata, bool tx,
 #define ICMP_PING_PRINT(str) \
 	do { \
 		if (tx) { \
-			DHD_PKTDUMP_MEM((DHD_LOG_PREFIX "[%s] "str " [TX] : %s(%s) %s %s(%s) SEQNUM=%d" \
+			DHD_PKTDUMP_MEM(("[%s] "str " [TX] : %s(%s) %s %s(%s) SEQNUM=%d" \
 				TXFATE_FMT"\n", ifname, tx?sabuf:dabuf, tx?seabuf:deabuf, \
 				tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf, seqnum, \
 				TX_PKTHASH(pkthash), TX_FATE(pktfate))); \
 		} else { \
-			DHD_PKTDUMP_MEM((DHD_LOG_PREFIX "[%s] "str " [RX] : %s(%s) %s %s(%s) SEQNUM=%d\n", \
+			DHD_PKTDUMP_MEM(("[%s] "str " [RX] : %s(%s) %s %s(%s) SEQNUM=%d\n", \
 				ifname, tx?sabuf:dabuf, tx?seabuf:deabuf, \
 				tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf, seqnum)); \
 		} \
@@ -1110,12 +1207,12 @@ dhd_dhcp_dump(dhd_pub_t *dhdp, int ifidx, uint8 *pktdata, bool tx,
 #define ICMP_PRINT(str) \
 	do { \
 		if (tx) { \
-			DHD_PKTDUMP_MEM((DHD_LOG_PREFIX "[%s] "str " [TX] : %s(%s) %s %s(%s) TYPE=%d, CODE=%d" \
+			DHD_PKTDUMP_MEM(("[%s] "str " [TX] : %s(%s) %s %s(%s) TYPE=%d, CODE=%d" \
 				TXFATE_FMT "\n", ifname, tx?sabuf:dabuf, tx?seabuf:deabuf, \
 				tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf, type, code, \
 				TX_PKTHASH(pkthash), TX_FATE(pktfate))); \
 		} else { \
-			DHD_PKTDUMP_MEM((DHD_LOG_PREFIX "[%s] "str " [RX] : %s(%s) %s %s(%s) TYPE=%d," \
+			DHD_PKTDUMP_MEM(("[%s] "str " [RX] : %s(%s) %s %s(%s) TYPE=%d," \
 				" CODE=%d\n", ifname, tx?sabuf:dabuf, tx?seabuf:deabuf, \
 				tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf, type, code)); \
 		} \
@@ -1137,18 +1234,6 @@ dhd_icmp_dump(dhd_pub_t *dhdp, int ifidx, uint8 *pktdata, bool tx,
 
 	if (!(dump_msg_level & DUMP_ICMP_VAL))
 		return;
-
-	/* check IP header */
-	if ((IPV4_HLEN(iph) < IPV4_HLEN_MIN) ||
-		IP_VER(iph) != IP_VER_4 ||
-		IPV4_PROT(iph) != IP_PROT_ICMP) {
-		return;
-	}
-
-	/* check header length */
-	if (ntohs(iph->tot_len) - IPV4_HLEN(iph) < sizeof(struct bcmicmp_hdr)) {
-		return;
-	}
 
 	ifname = dhd_ifname(dhdp, ifidx);
 	cond = (tx && pktfate) ? FALSE : TRUE;
@@ -1178,23 +1263,48 @@ dhd_icmp_dump(dhd_pub_t *dhdp, int ifidx, uint8 *pktdata, bool tx,
 }
 #endif /* DHD_ICMP_DUMP */
 
+bool
+dhd_check_arp(uint8 *pktdata, uint16 ether_type)
+{
+	uint8 *pkt = (uint8 *)&pktdata[ETHER_HDR_LEN];
+	struct bcmarp *arph = (struct bcmarp *)pkt;
+
+	/* validation check */
+	if ((ether_type != ETHER_TYPE_ARP) ||
+		(arph->htype != hton16(HTYPE_ETHERNET)) ||
+		(arph->hlen != ETHER_ADDR_LEN) ||
+		(arph->plen != 4)) {
+		return FALSE;
+	}
+	return TRUE;
+}
+
 #ifdef DHD_ARP_DUMP
+#ifdef BOARD_HIKEY
+/* On Hikey, due to continuous ARP prints
+ * DPC not scheduled. Hence rate limit the prints.
+ */
+#define DHD_PKTDUMP_ARP DHD_ERROR_RLMT
+#else
+#define DHD_PKTDUMP_ARP DHD_PKTDUMP
+#endif /* BOARD_HIKEY */
+
 #define ARP_PRINT(str) \
 	do { \
 		if (tx) { \
 			if (dump_enabled && pktfate && !TX_FATE_ACKED(pktfate)) { \
-				DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] "str " [TX] : %s(%s) %s %s(%s)"TXFATE_FMT"\n", \
+				DHD_PKTDUMP(("[%s] "str " [TX] : %s(%s) %s %s(%s)"TXFATE_FMT"\n", \
 					ifname, tx?sabuf:dabuf, tx?seabuf:deabuf, \
 					tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf, \
 					TX_PKTHASH(pkthash), TX_FATE(pktfate))); \
 			} else { \
-				DHD_PKTDUMP_MEM((DHD_LOG_PREFIX "[%s] "str " [TX] : %s(%s) %s %s(%s)"TXFATE_FMT"\n", \
+				DHD_PKTDUMP_MEM(("[%s] "str " [TX] : %s(%s) %s %s(%s)"TXFATE_FMT"\n", \
 					ifname, tx?sabuf:dabuf, tx?seabuf:deabuf, \
 					tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf, \
 					TX_PKTHASH(pkthash), TX_FATE(pktfate))); \
 			} \
 		} else { \
-			DHD_PKTDUMP_MEM((DHD_LOG_PREFIX "[%s] "str " [RX] : %s(%s) %s %s(%s)\n", \
+			DHD_PKTDUMP_MEM(("[%s] "str " [RX] : %s(%s) %s %s(%s)\n", \
 				ifname, tx?sabuf:dabuf, tx?seabuf:deabuf, \
 				tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf)); \
 		} \
@@ -1204,18 +1314,18 @@ dhd_icmp_dump(dhd_pub_t *dhdp, int ifidx, uint8 *pktdata, bool tx,
 	do { \
 		if (tx) { \
 			if (dump_enabled && pktfate && !TX_FATE_ACKED(pktfate)) { \
-				DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] "str " [TX] : %s(%s) %s %s(%s) op_code=%d" \
+				DHD_PKTDUMP(("[%s] "str " [TX] : %s(%s) %s %s(%s) op_code=%d" \
 					TXFATE_FMT "\n", ifname, tx?sabuf:dabuf, tx?seabuf:deabuf, \
 					tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf, opcode, \
 					TX_PKTHASH(pkthash), TX_FATE(pktfate))); \
 			} else { \
-				DHD_PKTDUMP_MEM((DHD_LOG_PREFIX "[%s] "str " [TX] : %s(%s) %s %s(%s) op_code=%d" \
+				DHD_PKTDUMP_MEM(("[%s] "str " [TX] : %s(%s) %s %s(%s) op_code=%d" \
 				TXFATE_FMT "\n", ifname, tx?sabuf:dabuf, tx?seabuf:deabuf, \
 					tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf, opcode, \
 				TX_PKTHASH(pkthash), TX_FATE(pktfate))); \
 			} \
 		} else { \
-			DHD_PKTDUMP_MEM((DHD_LOG_PREFIX "[%s] "str " [RX] : %s(%s) %s %s(%s) op_code=%d\n", \
+			DHD_PKTDUMP_MEM(("[%s] "str " [RX] : %s(%s) %s %s(%s) op_code=%d\n", \
 				ifname, tx?sabuf:dabuf, tx?seabuf:deabuf, \
 					tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf, opcode)); \
 		} \
@@ -1236,13 +1346,6 @@ dhd_arp_dump(dhd_pub_t *dhdp, int ifidx, uint8 *pktdata, bool tx,
 
 	if (!(dump_msg_level & DUMP_ARP_VAL))
 		return;
-
-	/* validation check */
-	if (arph->htype != hton16(HTYPE_ETHERNET) ||
-		arph->hlen != ETHER_ADDR_LEN ||
-		arph->plen != 4) {
-		return;
-	}
 
 	ifname = dhd_ifname(dhdp, ifidx);
 	opcode = ntoh16(arph->oper);
@@ -1268,6 +1371,30 @@ dhd_arp_dump(dhd_pub_t *dhdp, int ifidx, uint8 *pktdata, bool tx,
 }
 #endif /* DHD_ARP_DUMP */
 
+bool
+dhd_check_dns(uint8 *pktdata)
+{
+	hdr_fmt_t *dnsh = (hdr_fmt_t *)&pktdata[ETHER_HDR_LEN];
+	struct ipv4_hdr *iph = &dnsh->iph;
+
+	if (IPV4_PROT(iph) != IP_PROT_UDP) {
+		return FALSE;
+	}
+
+	/* check UDP port for DNS */
+	if (dnsh->udph.src_port != hton16(UDP_PORT_DNS) &&
+		dnsh->udph.dst_port != hton16(UDP_PORT_DNS)) {
+		return FALSE;
+	}
+
+	/* check header length */
+	if (ntoh16(iph->tot_len) < (ntoh16(dnsh->udph.len) +
+		sizeof(struct bcmudp_hdr))) {
+		return FALSE;
+	}
+	return TRUE;
+}
+
 #ifdef DHD_DNS_DUMP
 typedef struct dns_fmt {
 	struct ipv4_hdr iph;
@@ -1280,7 +1407,6 @@ typedef struct dns_fmt {
 	uint16 arcount;
 } PACKED_STRUCT dns_fmt_t;
 
-#define UDP_PORT_DNS		53
 #define DNS_QR_LOC		15
 #define DNS_OPCODE_LOC		11
 #define DNS_RCODE_LOC		0
@@ -1303,18 +1429,18 @@ static const char dns_opcode_types[][11] = {
 	do { \
 		if (tx) { \
 			if (dump_enabled && pktfate && !TX_FATE_ACKED(pktfate)) { \
-				DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] " str " [TX] : %s(%s) %s %s(%s) ID:0x%04X OPCODE:%s" \
+				DHD_PKTDUMP(("[%s] " str " [TX] : %s(%s) %s %s(%s) ID:0x%04X OPCODE:%s" \
 					TXFATE_FMT "\n", ifname, tx?sabuf:dabuf, tx?seabuf:deabuf, \
 					tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf, \
 					id, DNSOPCODE(opcode), TX_PKTHASH(pkthash), TX_FATE(pktfate))); \
 			} else { \
-				DHD_PKTDUMP_MEM((DHD_LOG_PREFIX "[%s] " str " [TX] : %s(%s) %s %s(%s) ID:0x%04X OPCODE:%s" \
+				DHD_PKTDUMP_MEM(("[%s] " str " [TX] : %s(%s) %s %s(%s) ID:0x%04X OPCODE:%s" \
 					TXFATE_FMT "\n", ifname, tx?sabuf:dabuf, tx?seabuf:deabuf, \
 					tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf, \
 					id, DNSOPCODE(opcode), TX_PKTHASH(pkthash), TX_FATE(pktfate))); \
 			} \
 		} else { \
-			DHD_PKTDUMP_MEM((DHD_LOG_PREFIX "[%s] " str " [RX] : %s(%s) %s %s(%s) ID:0x%04X OPCODE:%s\n", \
+			DHD_PKTDUMP_MEM(("[%s] " str " [RX] : %s(%s) %s %s(%s) ID:0x%04X OPCODE:%s\n", \
 				ifname, tx?sabuf:dabuf, tx?seabuf:deabuf, tx?"->":"<-", \
 				tx?dabuf:sabuf, tx?deabuf:seabuf, id, DNSOPCODE(opcode))); \
 		} \
@@ -1324,18 +1450,18 @@ static const char dns_opcode_types[][11] = {
 	do { \
 		if (tx) { \
 			if (dump_enabled && pktfate && !TX_FATE_ACKED(pktfate)) { \
-				DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] " str " [TX] : %s(%s) %s %s(%s) ID:0x%04X OPCODE:%s RCODE:%d" \
+				DHD_PKTDUMP(("[%s] " str " [TX] : %s(%s) %s %s(%s) ID:0x%04X OPCODE:%s RCODE:%d" \
 					TXFATE_FMT "\n", ifname, tx?sabuf:dabuf, tx?seabuf:deabuf, \
 					tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf, id, DNSOPCODE(opcode), \
 					GET_DNS_RCODE(flags), TX_PKTHASH(pkthash), TX_FATE(pktfate))); \
 			} else { \
-				DHD_PKTDUMP_MEM((DHD_LOG_PREFIX "[%s] " str " [TX] : %s(%s) %s %s(%s) ID:0x%04X OPCODE:%s RCODE:%d" \
+				DHD_PKTDUMP_MEM(("[%s] " str " [TX] : %s(%s) %s %s(%s) ID:0x%04X OPCODE:%s RCODE:%d" \
 					TXFATE_FMT "\n", ifname, tx?sabuf:dabuf, tx?seabuf:deabuf, \
 					tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf, id, DNSOPCODE(opcode), \
 					GET_DNS_RCODE(flags), TX_PKTHASH(pkthash), TX_FATE(pktfate))); \
 			} \
 		} else { \
-			DHD_PKTDUMP_MEM((DHD_LOG_PREFIX "[%s] " str " [RX] : %s(%s) %s %s(%s) ID:0x%04X OPCODE:%s RCODE:%d\n", \
+			DHD_PKTDUMP_MEM(("[%s] " str " [RX] : %s(%s) %s %s(%s) ID:0x%04X OPCODE:%s RCODE:%d\n", \
 				ifname, tx?sabuf:dabuf, tx?seabuf:deabuf, \
 				tx?"->":"<-", tx?dabuf:sabuf, tx?deabuf:seabuf, \
 				id, DNSOPCODE(opcode), GET_DNS_RCODE(flags))); \
@@ -1357,25 +1483,6 @@ dhd_dns_dump(dhd_pub_t *dhdp, int ifidx, uint8 *pktdata, bool tx,
 
 	if (!(dump_msg_level & DUMP_DNS_VAL))
 		return;
-
-	/* check IP header */
-	if ((IPV4_HLEN(iph) < IPV4_HLEN_MIN) ||
-		IP_VER(iph) != IP_VER_4 ||
-		IPV4_PROT(iph) != IP_PROT_UDP) {
-		return;
-	}
-
-	/* check UDP port for DNS */
-	if (dnsh->udph.src_port != hton16(UDP_PORT_DNS) &&
-		dnsh->udph.dst_port != hton16(UDP_PORT_DNS)) {
-		return;
-	}
-
-	/* check header length */
-	if (ntoh16(iph->tot_len) < (ntoh16(dnsh->udph.len) +
-		sizeof(struct bcmudp_hdr))) {
-		return;
-	}
 
 	ifname = dhd_ifname(dhdp, ifidx);
 	cond = (tx && pktfate) ? FALSE : TRUE;
@@ -1450,13 +1557,13 @@ dhd_trx_pkt_dump(dhd_pub_t *dhdp, int ifidx, uint8 *pktdata, uint32 pktlen, bool
 
 	if (protocol != ETHER_TYPE_BRCM) {
 		if (pktdata[0] == 0xFF) {
-			DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] %s BROADCAST DUMP - %s\n",
+			DHD_PKTDUMP(("[%s] %s BROADCAST DUMP - %s\n",
 				dhd_ifname(dhdp, ifidx), tx?"TX":"RX", pkttype));
 		} else if (pktdata[0] & 1) {
-			DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] %s MULTICAST DUMP " MACDBG " - %s\n",
+			DHD_PKTDUMP(("[%s] %s MULTICAST DUMP " MACDBG " - %s\n",
 				dhd_ifname(dhdp, ifidx), tx?"TX":"RX", MAC2STRDBG(pktdata), pkttype));
 		} else {
-			DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] %s DUMP - %s\n",
+			DHD_PKTDUMP(("[%s] %s DUMP - %s\n",
 				dhd_ifname(dhdp, ifidx), tx?"TX":"RX", pkttype));
 		}
 #ifdef DHD_RX_FULL_DUMP
@@ -1464,8 +1571,165 @@ dhd_trx_pkt_dump(dhd_pub_t *dhdp, int ifidx, uint8 *pktdata, uint32 pktlen, bool
 #endif /* DHD_RX_FULL_DUMP */
 	}
 	else {
-		DHD_PKTDUMP((DHD_LOG_PREFIX "[%s] %s DUMP - %s\n",
+		DHD_PKTDUMP(("[%s] %s DUMP - %s\n",
 			dhd_ifname(dhdp, ifidx), tx?"TX":"RX", pkttype));
 	}
 }
 #endif /* DHD_RX_DUMP */
+
+#ifdef BCMPCIE
+static bool
+dhd_is_eapol_pkt(dhd_pub_t *dhd, uint8 *pktdata, uint32 pktlen)
+{
+	eapol_header_t *eapol_hdr = (eapol_header_t *)pktdata;
+
+	eapol_hdr = (eapol_header_t *)pktdata;
+
+	if (eapol_hdr->type == EAP_PACKET) {
+		return TRUE;
+	} else if (eapol_hdr->type == EAPOL_START) {
+		return TRUE;
+	} else if (eapol_hdr->type == EAPOL_KEY) {
+		return TRUE;
+	} else {
+		return TRUE;
+	}
+	return FALSE;
+}
+
+static bool
+dhd_is_arp_pkt(dhd_pub_t *dhdp, uint8 *pktdata)
+{
+	uint8 *pkt = (uint8 *)&pktdata[ETHER_HDR_LEN];
+	struct bcmarp *arph = (struct bcmarp *)pkt;
+	uint16 opcode;
+
+	/* validation check */
+	if (arph->htype != hton16(HTYPE_ETHERNET) ||
+		arph->hlen != ETHER_ADDR_LEN ||
+		arph->plen != 4) {
+		return FALSE;
+	}
+
+	opcode = ntoh16(arph->oper);
+	if (opcode == ARP_OPC_REQUEST) {
+		return TRUE;
+	} else if (opcode == ARP_OPC_REPLY) {
+		return TRUE;
+	} else {
+		return TRUE;
+	}
+	return FALSE;
+}
+
+static bool
+dhd_is_dhcp_pkt(dhd_pub_t *dhdp, uint8 *pktdata)
+{
+	bootp_fmt_t *b = (bootp_fmt_t *)&pktdata[ETHER_HDR_LEN];
+	struct ipv4_hdr *iph = &b->iph;
+	uint8 *ptr, *opt, *end = (uint8 *) b + ntohs(b->iph.tot_len);
+	int len, opt_len;
+
+	/* check IP header */
+	if ((IPV4_HLEN(iph) < IPV4_HLEN_MIN) ||
+		IP_VER(iph) != IP_VER_4 ||
+		IPV4_PROT(iph) != IP_PROT_UDP) {
+		return FALSE;
+	}
+
+	/* check UDP port for bootp (67, 68) */
+	if (b->udph.src_port != htons(DHCP_PORT_SERVER) &&
+		b->udph.src_port != htons(DHCP_PORT_CLIENT) &&
+		b->udph.dst_port != htons(DHCP_PORT_SERVER) &&
+		b->udph.dst_port != htons(DHCP_PORT_CLIENT)) {
+		return FALSE;
+	}
+
+	/* check header length */
+	if (ntohs(iph->tot_len) < ntohs(b->udph.len) + sizeof(struct bcmudp_hdr)) {
+		return FALSE;
+	}
+
+	len = ntohs(b->udph.len) - sizeof(struct bcmudp_hdr);
+	opt_len = len - (sizeof(*b) - sizeof(struct ipv4_hdr) -
+		sizeof(struct bcmudp_hdr) - sizeof(b->options));
+
+	/* parse bootp options */
+	if (opt_len >= BOOTP_MAGIC_COOKIE_LEN &&
+		!memcmp(b->options, bootp_magic_cookie, BOOTP_MAGIC_COOKIE_LEN)) {
+		ptr = &b->options[BOOTP_MAGIC_COOKIE_LEN];
+		while (ptr < end && *ptr != 0xff) {
+			opt = ptr++;
+			if (*opt == 0) {
+				continue;
+			}
+			ptr += *ptr + 1;
+			if (ptr >= end) {
+				break;
+			}
+			if (*opt == DHCP_OPT_MSGTYPE) {
+				if (opt[1]) {
+					return TRUE;
+				}
+			}
+		}
+	}
+
+	return FALSE;
+}
+
+static bool
+dhd_is_icmp_pkt(dhd_pub_t *dhd, uint8 *pktdata, uint32 pktlen)
+{
+	uint8 *pkt;
+	struct ipv4_hdr *iph;
+
+	pkt = (uint8 *)&pktdata[ETHER_HDR_LEN];
+	iph = (struct ipv4_hdr *)pkt;
+
+	/* check IP header */
+	if ((IPV4_HLEN(iph) < IPV4_HLEN_MIN) ||
+		IP_VER(iph) != IP_VER_4 ||
+		IPV4_PROT(iph) != IP_PROT_ICMP) {
+		return FALSE;
+	}
+
+	/* check header length */
+	if (ntohs(iph->tot_len) - IPV4_HLEN(iph) < sizeof(struct bcmicmp_hdr)) {
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+bool
+dhd_match_pkt_type(dhd_pub_t *dhd, uint8 *pktdata, uint32 pktlen)
+{
+	struct ether_header *eh;
+	uint16 ether_type;
+	bool match = FALSE;
+
+	if (!pktdata || pktlen < ETHER_HDR_LEN) {
+		return match;
+	}
+
+	eh = (struct ether_header *)pktdata;
+	ether_type = ntoh16(eh->ether_type);
+	if ((dhd->conf->enq_hdr_pkt & ENQ_PKT_TYPE_EAPOL) &&
+			ether_type == ETHER_TYPE_802_1X) {
+		match = dhd_is_eapol_pkt(dhd, pktdata, pktlen);
+	}
+	else if ((dhd->conf->enq_hdr_pkt & ENQ_PKT_TYPE_ARP) &&
+			ntoh16(eh->ether_type) == ETHER_TYPE_ARP) {
+		match = dhd_is_arp_pkt(dhd, pktdata);
+	}
+	else if (ntoh16(eh->ether_type) == ETHER_TYPE_IP) {
+		if (dhd->conf->enq_hdr_pkt & ENQ_PKT_TYPE_ICMP)
+			match = dhd_is_icmp_pkt(dhd, pktdata, pktlen);
+		if (!match && dhd->conf->enq_hdr_pkt & ENQ_PKT_TYPE_DHCP)
+			match = dhd_is_dhcp_pkt(dhd, pktdata);
+	}
+
+	return match;
+}
+#endif /* BCMPCIE */

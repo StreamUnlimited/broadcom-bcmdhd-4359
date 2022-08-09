@@ -2,7 +2,7 @@
  * Broadcom Dongle Host Driver (DHD), Linux-specific network interface
  * Basically selected code segments from usb-cdc.c and usb-rndis.c
  *
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -18,14 +18,10 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
- *
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd_linux_lb.c 805819 2019-02-20 10:49:35Z $
+ * $Id$
  */
 
 #include <dhd_linux_priv.h>
@@ -34,15 +30,25 @@ extern dhd_pub_t* g_dhd_pub;
 
 #if defined(DHD_LB)
 
+#ifdef DHD_LB_STATS
+#define DHD_NUM_NAPI_LATENCY_ROWS (17u)
+#define DHD_NAPI_LATENCY_SIZE (sizeof(uint64) * DHD_NUM_NAPI_LATENCY_ROWS)
+#endif /* DHD_LB_STATS */
+
+#ifdef DHD_REPLACE_LOG_INFO_TO_TRACE
+#define DHD_LB_INFO DHD_TRACE
+#else
+#define DHD_LB_INFO DHD_INFO
+#endif /* DHD_REPLACE_LOG_INFO_TO_TRACE */
+
 void
 dhd_lb_set_default_cpus(dhd_info_t *dhd)
 {
 	/* Default CPU allocation for the jobs */
 	atomic_set(&dhd->rx_napi_cpu, 1);
-	atomic_set(&dhd->rx_compl_cpu, 2);
-	atomic_set(&dhd->tx_compl_cpu, 2);
 	atomic_set(&dhd->tx_cpu, 2);
 	atomic_set(&dhd->net_tx_cpu, 0);
+	atomic_set(&dhd->dpc_cpu, 0);
 }
 
 void
@@ -65,6 +71,7 @@ dhd_cpumasks_init(dhd_info_t *dhd)
 	DHD_ERROR(("%s CPU masks primary(big)=0x%x secondary(little)=0x%x\n", __FUNCTION__,
 		DHD_LB_PRIMARY_CPUS, DHD_LB_SECONDARY_CPUS));
 
+	/* FIXME: If one alloc fails we must free_cpumask_var the previous */
 	if (!alloc_cpumask_var(&dhd->cpumask_curr_avail, GFP_KERNEL) ||
 	    !alloc_cpumask_var(&dhd->cpumask_primary, GFP_KERNEL) ||
 	    !alloc_cpumask_var(&dhd->cpumask_primary_new, GFP_KERNEL) ||
@@ -112,27 +119,20 @@ fail:
  * There are two types of Job, that needs to be assigned to
  * the CPUs, from one of the above mentioned CPU group. The Jobs are
  * 1) Rx Packet Processing - napi_cpu
- * 2) Completion Processiong (Tx, RX) - compl_cpu
  *
- * To begin with both napi_cpu and compl_cpu are on CPU0. Whenever a CPU goes
+ * To begin with napi_cpu is on CPU0. Whenever a CPU goes
  * on-line/off-line the CPU candidacy algorithm is triggerd. The candidacy
  * algo tries to pickup the first available non boot CPU (CPU0) for napi_cpu.
- * If there are more processors free, it assigns one to compl_cpu.
- * It also tries to ensure that both napi_cpu and compl_cpu are not on the same
- * CPU, as much as possible.
  *
- * By design, both Tx and Rx completion jobs are run on the same CPU core, as it
- * would allow Tx completion skb's to be released into a local free pool from
- * which the rx buffer posts could have been serviced. it is important to note
- * that a Tx packet may not have a large enough buffer for rx posting.
  */
 void dhd_select_cpu_candidacy(dhd_info_t *dhd)
 {
 	uint32 primary_available_cpus; /* count of primary available cpus */
 	uint32 secondary_available_cpus; /* count of secondary available cpus */
 	uint32 napi_cpu = 0; /* cpu selected for napi rx processing */
-	uint32 compl_cpu = 0; /* cpu selected for completion jobs */
 	uint32 tx_cpu = 0; /* cpu selected for tx processing job */
+	uint32 dpc_cpu = atomic_read(&dhd->dpc_cpu);
+	uint32 net_tx_cpu = atomic_read(&dhd->net_tx_cpu);
 
 	cpumask_clear(dhd->cpumask_primary_new);
 	cpumask_clear(dhd->cpumask_secondary_new);
@@ -148,9 +148,25 @@ void dhd_select_cpu_candidacy(dhd_info_t *dhd)
 	cpumask_and(dhd->cpumask_secondary_new, dhd->cpumask_secondary,
 		dhd->cpumask_curr_avail);
 
+	/* Clear DPC cpu from new masks so that dpc cpu is not chosen for LB */
+	cpumask_clear_cpu(dpc_cpu, dhd->cpumask_primary_new);
+	cpumask_clear_cpu(dpc_cpu, dhd->cpumask_secondary_new);
+
+	/* Clear net_tx_cpu from new masks so that same is not chosen for LB */
+	cpumask_clear_cpu(net_tx_cpu, dhd->cpumask_primary_new);
+	cpumask_clear_cpu(net_tx_cpu, dhd->cpumask_secondary_new);
+
 	primary_available_cpus = cpumask_weight(dhd->cpumask_primary_new);
 
-	if (primary_available_cpus > 0) {
+#if defined(DHD_LB_HOST_CTRL)
+	/* Does not use promary cpus if DHD received affinity off cmd
+	*  from framework
+	*/
+	if (primary_available_cpus > 0 && dhd->permitted_primary_cpu)
+#else
+	if (primary_available_cpus > 0)
+#endif /* DHD_LB_HOST_CTRL */
+	{
 		napi_cpu = cpumask_first(dhd->cpumask_primary_new);
 
 		/* If no further CPU is available,
@@ -159,15 +175,10 @@ void dhd_select_cpu_candidacy(dhd_info_t *dhd)
 		tx_cpu = cpumask_next(napi_cpu, dhd->cpumask_primary_new);
 		if (tx_cpu >= nr_cpu_ids)
 			tx_cpu = 0;
-
-		/* In case there are no more CPUs, do completions & Tx in same CPU */
-		compl_cpu = cpumask_next(tx_cpu, dhd->cpumask_primary_new);
-		if (compl_cpu >= nr_cpu_ids)
-			compl_cpu = tx_cpu;
 	}
 
-	DHD_INFO(("%s After primary CPU check napi_cpu %d compl_cpu %d tx_cpu %d\n",
-		__FUNCTION__, napi_cpu, compl_cpu, tx_cpu));
+	DHD_INFO(("%s After primary CPU check napi_cpu %d tx_cpu %d\n",
+		__FUNCTION__, napi_cpu, tx_cpu));
 
 	/* -- Now check for the CPUs from the secondary mask -- */
 	secondary_available_cpus = cpumask_weight(dhd->cpumask_secondary_new);
@@ -179,43 +190,36 @@ void dhd_select_cpu_candidacy(dhd_info_t *dhd)
 		/* At this point if napi_cpu is unassigned it means no CPU
 		 * is online from Primary Group
 		 */
+#if defined(DHD_LB_TXP_LITTLE_CORE_CTRL)
+		/* Clear tx_cpu, so that it can be picked from little core */
+		tx_cpu = 0;
+#endif /* DHD_LB_TXP_LITTLE_CORE_CTRL */
 		if (napi_cpu == 0) {
 			napi_cpu = cpumask_first(dhd->cpumask_secondary_new);
 			tx_cpu = cpumask_next(napi_cpu, dhd->cpumask_secondary_new);
-			compl_cpu = cpumask_next(tx_cpu, dhd->cpumask_secondary_new);
 		} else if (tx_cpu == 0) {
 			tx_cpu = cpumask_first(dhd->cpumask_secondary_new);
-			compl_cpu = cpumask_next(tx_cpu, dhd->cpumask_secondary_new);
-		} else if (compl_cpu == 0) {
-			compl_cpu = cpumask_first(dhd->cpumask_secondary_new);
 		}
 
 		/* If no CPU was available for tx processing, choose CPU 0 */
 		if (tx_cpu >= nr_cpu_ids)
 			tx_cpu = 0;
-
-		/* If no CPU was available for completion, choose CPU 0 */
-		if (compl_cpu >= nr_cpu_ids)
-			compl_cpu = 0;
 	}
+
 	if ((primary_available_cpus == 0) &&
 		(secondary_available_cpus == 0)) {
 		/* No CPUs available from primary or secondary mask */
 		napi_cpu = 1;
-		compl_cpu = 0;
 		tx_cpu = 2;
 	}
 
-	DHD_INFO(("%s After secondary CPU check napi_cpu %d compl_cpu %d tx_cpu %d\n",
-		__FUNCTION__, napi_cpu, compl_cpu, tx_cpu));
+	DHD_INFO(("%s After secondary CPU check napi_cpu %d tx_cpu %d\n",
+		__FUNCTION__, napi_cpu, tx_cpu));
 
 	ASSERT(napi_cpu < nr_cpu_ids);
-	ASSERT(compl_cpu < nr_cpu_ids);
 	ASSERT(tx_cpu < nr_cpu_ids);
 
 	atomic_set(&dhd->rx_napi_cpu, napi_cpu);
-	atomic_set(&dhd->tx_compl_cpu, compl_cpu);
-	atomic_set(&dhd->rx_compl_cpu, compl_cpu);
 	atomic_set(&dhd->tx_cpu, tx_cpu);
 
 	return;
@@ -257,15 +261,11 @@ int
 dhd_cpu_callback(struct notifier_block *nfb, unsigned long action, void *hcpu)
 {
 	unsigned long int cpu = (unsigned long int)hcpu;
+	dhd_info_t *dhd;
 
-#if defined(STRICT_GCC_WARNINGS) && defined(__GNUC__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wcast-qual"
-#endif // endif
-	dhd_info_t *dhd = container_of(nfb, dhd_info_t, cpu_notifier);
-#if defined(STRICT_GCC_WARNINGS) && defined(__GNUC__)
-#pragma GCC diagnostic pop
-#endif // endif
+	GCC_DIAGNOSTIC_PUSH_SUPPRESS_CAST();
+	dhd = container_of(nfb, dhd_info_t, cpu_notifier);
+	GCC_DIAGNOSTIC_POP();
 
 	if (!dhd || !(dhd->dhd_state & DHD_ATTACH_STATE_LB_ATTACH_DONE)) {
 		DHD_INFO(("%s(): LB data is not initialized yet.\n",
@@ -273,6 +273,7 @@ dhd_cpu_callback(struct notifier_block *nfb, unsigned long action, void *hcpu)
 		return NOTIFY_BAD;
 	}
 
+	/* XXX: Do we need other action types ? */
 	switch (action)
 	{
 		case CPU_ONLINE:
@@ -329,11 +330,84 @@ int dhd_unregister_cpuhp_callback(dhd_info_t *dhd)
 	if (dhd->cpu_notifier.notifier_call != NULL) {
 		unregister_cpu_notifier(&dhd->cpu_notifier);
 	}
-#endif // endif
+#endif
 	return ret;
 }
 
 #if defined(DHD_LB_STATS)
+void dhd_lb_stats_reset(dhd_pub_t *dhdp)
+{
+	dhd_info_t *dhd;
+	int i, j, num_cpus = num_possible_cpus();
+
+	if (dhdp == NULL) {
+		DHD_ERROR(("%s dhd pub pointer is NULL \n",
+			__FUNCTION__));
+		return;
+	}
+
+	dhd = dhdp->info;
+	if (dhd == NULL) {
+		DHD_ERROR(("%s(): DHD pointer is NULL \n", __FUNCTION__));
+		return;
+	}
+
+	DHD_LB_STATS_CLR(dhd->dhd_dpc_cnt);
+	DHD_LB_STATS_CLR(dhd->napi_sched_cnt);
+
+	/* reset NAPI latency stats */
+	if (dhd->napi_latency) {
+		bzero(dhd->napi_latency, DHD_NAPI_LATENCY_SIZE);
+	}
+	/* reset NAPI per cpu stats */
+	if (dhd->napi_percpu_run_cnt) {
+		for (i = 0; i < num_cpus; i++) {
+			DHD_LB_STATS_CLR(dhd->napi_percpu_run_cnt[i]);
+		}
+	}
+
+	DHD_LB_STATS_CLR(dhd->rxc_sched_cnt);
+
+	if (dhd->rxc_percpu_run_cnt) {
+		for (i = 0; i < num_cpus; i++) {
+			DHD_LB_STATS_CLR(dhd->rxc_percpu_run_cnt[i]);
+		}
+	}
+
+	DHD_LB_STATS_CLR(dhd->txc_sched_cnt);
+
+	if (dhd->txc_percpu_run_cnt) {
+		for (i = 0; i < num_cpus; i++) {
+			DHD_LB_STATS_CLR(dhd->txc_percpu_run_cnt[i]);
+		}
+	}
+
+	if (dhd->txp_percpu_run_cnt) {
+		for (i = 0; i < num_cpus; i++) {
+			DHD_LB_STATS_CLR(dhd->txp_percpu_run_cnt[i]);
+		}
+	}
+
+	if (dhd->tx_start_percpu_run_cnt) {
+		for (i = 0; i < num_cpus; i++) {
+			DHD_LB_STATS_CLR(dhd->tx_start_percpu_run_cnt[i]);
+		}
+	}
+
+	for (j = 0; j < HIST_BIN_SIZE; j++) {
+		for (i = 0; i < num_cpus; i++) {
+			DHD_LB_STATS_CLR(dhd->napi_rx_hist[j][i]);
+		}
+	}
+
+	dhd->pub.lb_rxp_strt_thr_hitcnt = 0;
+	dhd->pub.lb_rxp_stop_thr_hitcnt = 0;
+
+	dhd->pub.lb_rxp_napi_sched_cnt = 0;
+	dhd->pub.lb_rxp_napi_complete_cnt = 0;
+	return;
+}
+
 void dhd_lb_stats_init(dhd_pub_t *dhdp)
 {
 	dhd_info_t *dhd;
@@ -355,6 +429,9 @@ void dhd_lb_stats_init(dhd_pub_t *dhdp)
 	DHD_LB_STATS_CLR(dhd->dhd_dpc_cnt);
 	DHD_LB_STATS_CLR(dhd->napi_sched_cnt);
 
+	/* NAPI latency stats */
+	dhd->napi_latency = (uint64 *)MALLOCZ(dhdp->osh, DHD_NAPI_LATENCY_SIZE);
+	/* NAPI per cpu stats */
 	dhd->napi_percpu_run_cnt = (uint32 *)MALLOC(dhdp->osh, alloc_size);
 	if (!dhd->napi_percpu_run_cnt) {
 		DHD_ERROR(("%s(): napi_percpu_run_cnt malloc failed \n",
@@ -433,32 +510,12 @@ void dhd_lb_stats_init(dhd_pub_t *dhdp)
 			DHD_LB_STATS_CLR(dhd->napi_rx_hist[j][i]);
 		}
 	}
-#ifdef DHD_LB_TXC
-	for (j = 0; j < HIST_BIN_SIZE; j++) {
-		dhd->txc_hist[j] = (uint32 *)MALLOC(dhdp->osh, alloc_size);
-		if (!dhd->txc_hist[j]) {
-			DHD_ERROR(("%s(): dhd->txc_hist[%d] malloc failed \n",
-			         __FUNCTION__, j));
-			return;
-		}
-		for (i = 0; i < num_cpus; i++) {
-			DHD_LB_STATS_CLR(dhd->txc_hist[j][i]);
-		}
-	}
-#endif /* DHD_LB_TXC */
-#ifdef DHD_LB_RXC
-	for (j = 0; j < HIST_BIN_SIZE; j++) {
-		dhd->rxc_hist[j] = (uint32 *)MALLOC(dhdp->osh, alloc_size);
-		if (!dhd->rxc_hist[j]) {
-			DHD_ERROR(("%s(): dhd->rxc_hist[%d] malloc failed \n",
-				__FUNCTION__, j));
-			return;
-		}
-		for (i = 0; i < num_cpus; i++) {
-			DHD_LB_STATS_CLR(dhd->rxc_hist[j][i]);
-		}
-	}
-#endif /* DHD_LB_RXC */
+
+	dhd->pub.lb_rxp_strt_thr_hitcnt = 0;
+	dhd->pub.lb_rxp_stop_thr_hitcnt = 0;
+
+	dhd->pub.lb_rxp_napi_sched_cnt = 0;
+	dhd->pub.lb_rxp_napi_complete_cnt = 0;
 	return;
 }
 
@@ -482,54 +539,48 @@ void dhd_lb_stats_deinit(dhd_pub_t *dhdp)
 
 	if (dhd->napi_percpu_run_cnt) {
 		MFREE(dhdp->osh, dhd->napi_percpu_run_cnt, alloc_size);
-		dhd->napi_percpu_run_cnt = NULL;
 	}
 	if (dhd->rxc_percpu_run_cnt) {
 		MFREE(dhdp->osh, dhd->rxc_percpu_run_cnt, alloc_size);
-		dhd->rxc_percpu_run_cnt = NULL;
 	}
 	if (dhd->txc_percpu_run_cnt) {
 		MFREE(dhdp->osh, dhd->txc_percpu_run_cnt, alloc_size);
-		dhd->txc_percpu_run_cnt = NULL;
 	}
 	if (dhd->cpu_online_cnt) {
 		MFREE(dhdp->osh, dhd->cpu_online_cnt, alloc_size);
-		dhd->cpu_online_cnt = NULL;
 	}
 	if (dhd->cpu_offline_cnt) {
 		MFREE(dhdp->osh, dhd->cpu_offline_cnt, alloc_size);
-		dhd->cpu_offline_cnt = NULL;
 	}
 
 	if (dhd->txp_percpu_run_cnt) {
 		MFREE(dhdp->osh, dhd->txp_percpu_run_cnt, alloc_size);
-		dhd->txp_percpu_run_cnt = NULL;
 	}
 	if (dhd->tx_start_percpu_run_cnt) {
 		MFREE(dhdp->osh, dhd->tx_start_percpu_run_cnt, alloc_size);
-		dhd->tx_start_percpu_run_cnt = NULL;
+	}
+	if (dhd->napi_latency) {
+		MFREE(dhdp->osh, dhd->napi_latency, DHD_NAPI_LATENCY_SIZE);
 	}
 
 	for (j = 0; j < HIST_BIN_SIZE; j++) {
 		if (dhd->napi_rx_hist[j]) {
 			MFREE(dhdp->osh, dhd->napi_rx_hist[j], alloc_size);
-			dhd->napi_rx_hist[j] = NULL;
 		}
-#ifdef DHD_LB_TXC
-		if (dhd->txc_hist[j]) {
-			MFREE(dhdp->osh, dhd->txc_hist[j], alloc_size);
-			dhd->txc_hist[j] = NULL;
-		}
-#endif /* DHD_LB_TXC */
-#ifdef DHD_LB_RXC
-		if (dhd->rxc_hist[j]) {
-			MFREE(dhdp->osh, dhd->rxc_hist[j], alloc_size);
-			dhd->rxc_hist[j] = NULL;
-		}
-#endif /* DHD_LB_RXC */
 	}
 
 	return;
+}
+
+void dhd_lb_stats_dump_napi_latency(dhd_pub_t *dhdp,
+	struct bcmstrbuf *strbuf, uint64 *napi_latency)
+{
+	uint32 i;
+
+	bcm_bprintf(strbuf, "napi-latency(us): \t count\n");
+	for (i = 0; i < DHD_NUM_NAPI_LATENCY_ROWS; i++) {
+		bcm_bprintf(strbuf, "%16u: \t %llu\n", 1U<<i, napi_latency[i]);
+	}
 }
 
 void dhd_lb_stats_dump_histo(dhd_pub_t *dhdp,
@@ -572,7 +623,6 @@ void dhd_lb_stats_dump_histo(dhd_pub_t *dhdp,
 
 	if (per_cpu_total) {
 		MFREE(dhdp->osh, per_cpu_total, sizeof(uint32) * num_cpus);
-		per_cpu_total = NULL;
 	}
 	return;
 }
@@ -581,17 +631,66 @@ void dhd_lb_stats_dump_cpu_array(struct bcmstrbuf *strbuf, uint32 *p)
 {
 	int i, num_cpus = num_possible_cpus();
 
-	bcm_bprintf(strbuf, "CPU: \t");
+	bcm_bprintf(strbuf, "CPU: \t\t");
 	for (i = 0; i < num_cpus; i++)
 		bcm_bprintf(strbuf, "%d\t", i);
 	bcm_bprintf(strbuf, "\n");
 
-	bcm_bprintf(strbuf, "Val: \t");
+	bcm_bprintf(strbuf, "Val: \t\t");
 	for (i = 0; i < num_cpus; i++)
 		bcm_bprintf(strbuf, "%u\t", *(p+i));
 	bcm_bprintf(strbuf, "\n");
 	return;
 }
+
+#ifdef DHD_MEM_STATS
+uint64 dhd_lb_mem_usage(dhd_pub_t *dhdp, struct bcmstrbuf *strbuf)
+{
+	dhd_info_t *dhd;
+	uint16 rxbufpost_sz;
+	uint16 rx_post_active = 0;
+	uint16 rx_cmpl_active = 0;
+	uint64 rx_path_memory_usage = 0;
+
+	if (dhdp == NULL || strbuf == NULL) {
+		DHD_ERROR(("%s(): Invalid argument dhdp %p strbuf %p \n",
+			__FUNCTION__, dhdp, strbuf));
+		return 0;
+	}
+
+	dhd = dhdp->info;
+	if (dhd == NULL) {
+		DHD_ERROR(("%s(): DHD pointer is NULL \n", __FUNCTION__));
+		return 0;
+	}
+	rxbufpost_sz = dhd_prot_get_rxbufpost_sz(dhdp);
+	if (rxbufpost_sz == 0) {
+		rxbufpost_sz = DHD_FLOWRING_RX_BUFPOST_PKTSZ;
+	}
+	rx_path_memory_usage = rxbufpost_sz * (skb_queue_len(&dhd->rx_pend_queue) +
+		skb_queue_len(&dhd->rx_napi_queue) +
+		skb_queue_len(&dhd->rx_process_queue));
+	rx_post_active = dhd_prot_get_h2d_rx_post_active(dhdp);
+	if (rx_post_active != 0) {
+		rx_path_memory_usage += (rxbufpost_sz * rx_post_active);
+	}
+
+	rx_cmpl_active = dhd_prot_get_d2h_rx_cpln_active(dhdp);
+	if (rx_cmpl_active != 0) {
+		rx_path_memory_usage += (rxbufpost_sz * rx_cmpl_active);
+	}
+
+	dhdp->rxpath_mem = rx_path_memory_usage;
+	bcm_bprintf(strbuf, "\nrxbufpost_sz: %d rx_post_active: %d rx_cmpl_active: %d "
+		"pend_queue_len: %d napi_queue_len: %d process_queue_len: %d\n",
+		rxbufpost_sz, rx_post_active, rx_cmpl_active,
+		skb_queue_len(&dhd->rx_pend_queue),
+		skb_queue_len(&dhd->rx_napi_queue), skb_queue_len(&dhd->rx_process_queue));
+	bcm_bprintf(strbuf, "DHD rx-path memory_usage: %llubytes %lluKB \n",
+		rx_path_memory_usage, (rx_path_memory_usage/ 1024));
+	return rx_path_memory_usage;
+}
+#endif /* DHD_MEM_STATS */
 
 void dhd_lb_stats_dump(dhd_pub_t *dhdp, struct bcmstrbuf *strbuf)
 {
@@ -619,26 +718,20 @@ void dhd_lb_stats_dump(dhd_pub_t *dhdp, struct bcmstrbuf *strbuf)
 		dhd->dhd_dpc_cnt, dhd->napi_sched_cnt, dhd->rxc_sched_cnt,
 		dhd->txc_sched_cnt);
 
+	bcm_bprintf(strbuf, "\nCPUs: dpc_cpu %u napi_cpu %u net_tx_cpu %u tx_cpu %u\n",
+		atomic_read(&dhd->dpc_cpu),
+		atomic_read(&dhd->rx_napi_cpu),
+		atomic_read(&dhd->net_tx_cpu),
+		atomic_read(&dhd->tx_cpu));
+
 #ifdef DHD_LB_RXP
 	bcm_bprintf(strbuf, "\nnapi_percpu_run_cnt:\n");
 	dhd_lb_stats_dump_cpu_array(strbuf, dhd->napi_percpu_run_cnt);
 	bcm_bprintf(strbuf, "\nNAPI Packets Received Histogram:\n");
 	dhd_lb_stats_dump_histo(dhdp, strbuf, dhd->napi_rx_hist);
+	bcm_bprintf(strbuf, "\nNAPI poll latency stats ie from napi schedule to napi execution\n");
+	dhd_lb_stats_dump_napi_latency(dhdp, strbuf, dhd->napi_latency);
 #endif /* DHD_LB_RXP */
-
-#ifdef DHD_LB_RXC
-	bcm_bprintf(strbuf, "\nrxc_percpu_run_cnt:\n");
-	dhd_lb_stats_dump_cpu_array(strbuf, dhd->rxc_percpu_run_cnt);
-	bcm_bprintf(strbuf, "\nRX Completions (Buffer Post) Histogram:\n");
-	dhd_lb_stats_dump_histo(dhdp, strbuf, dhd->rxc_hist);
-#endif /* DHD_LB_RXC */
-
-#ifdef DHD_LB_TXC
-	bcm_bprintf(strbuf, "\ntxc_percpu_run_cnt:\n");
-	dhd_lb_stats_dump_cpu_array(strbuf, dhd->txc_percpu_run_cnt);
-	bcm_bprintf(strbuf, "\nTX Completions (Buffer Free) Histogram:\n");
-	dhd_lb_stats_dump_histo(dhdp, strbuf, dhd->txc_hist);
-#endif /* DHD_LB_TXC */
 
 #ifdef DHD_LB_TXP
 	bcm_bprintf(strbuf, "\ntxp_percpu_run_cnt:\n");
@@ -649,17 +742,35 @@ void dhd_lb_stats_dump(dhd_pub_t *dhdp, struct bcmstrbuf *strbuf)
 #endif /* DHD_LB_TXP */
 }
 
-/* Given a number 'n' returns 'm' that is next larger power of 2 after n */
-static inline uint32 next_larger_power2(uint32 num)
+void dhd_lb_stats_update_napi_latency(uint64 *bin, uint32 latency)
 {
-	num--;
-	num |= (num >> 1);
-	num |= (num >> 2);
-	num |= (num >> 4);
-	num |= (num >> 8);
-	num |= (num >> 16);
+	uint64 *p;
+	uint32 bin_power;
+	bin_power = next_larger_power2(latency);
 
-	return (num + 1);
+	switch (bin_power) {
+		case   1: p = bin + 0; break;
+		case   2: p = bin + 1; break;
+		case   4: p = bin + 2; break;
+		case   8: p = bin + 3; break;
+		case  16: p = bin + 4; break;
+		case  32: p = bin + 5; break;
+		case  64: p = bin + 6; break;
+		case 128: p = bin + 7; break;
+		case 256: p = bin + 8; break;
+		case 512: p = bin + 9; break;
+		case 1024: p = bin + 10; break;
+		case 2048: p = bin + 11; break;
+		case 4096: p = bin + 12; break;
+		case 8192: p = bin + 13; break;
+		case 16384: p = bin + 14; break;
+		case 32768: p = bin + 15; break;
+		default : p = bin + 16; break;
+	}
+	ASSERT((p - bin) < DHD_NUM_NAPI_LATENCY_ROWS);
+	*p = *p + 1;
+	return;
+
 }
 
 void dhd_lb_stats_update_histo(uint32 **bin, uint32 count, uint32 cpu)
@@ -733,8 +844,6 @@ void dhd_lb_stats_rxc_percpu_cnt_incr(dhd_pub_t *dhdp)
 }
 #endif /* DHD_LB_STATS */
 
-#endif /* DHD_LB */
-#if defined(DHD_LB)
 /**
  * dhd_tasklet_schedule - Function that runs in IPI context of the destination
  * CPU and schedules a tasklet.
@@ -744,22 +853,6 @@ INLINE void
 dhd_tasklet_schedule(void *tasklet)
 {
 	tasklet_schedule((struct tasklet_struct *)tasklet);
-}
-/**
- * dhd_tasklet_schedule_on - Executes the passed takslet in a given CPU
- * @tasklet: tasklet to be scheduled
- * @on_cpu: cpu core id
- *
- * If the requested cpu is online, then an IPI is sent to this cpu via the
- * smp_call_function_single with no wait and the tasklet_schedule function
- * will be invoked to schedule the specified tasklet on the requested CPU.
- */
-INLINE void
-dhd_tasklet_schedule_on(struct tasklet_struct *tasklet, int on_cpu)
-{
-	const int wait = 0;
-	smp_call_function_single(on_cpu,
-		dhd_tasklet_schedule, (void *)tasklet, wait);
 }
 
 /**
@@ -778,156 +871,22 @@ dhd_work_schedule_on(struct work_struct *work, int on_cpu)
 	schedule_work_on(on_cpu, work);
 }
 
-#if defined(DHD_LB_TXC)
-/**
- * dhd_lb_tx_compl_dispatch - load balance by dispatching the tx_compl_tasklet
- * on another cpu. The tx_compl_tasklet will take care of DMA unmapping and
- * freeing the packets placed in the tx_compl workq
- */
-void
-dhd_lb_tx_compl_dispatch(dhd_pub_t *dhdp)
+INLINE void
+dhd_delayed_work_schedule_on(struct delayed_work *dwork, int on_cpu, ulong delay)
 {
-	dhd_info_t *dhd = dhdp->info;
-	int curr_cpu, on_cpu;
-
-	if (dhd->rx_napi_netdev == NULL) {
-		DHD_ERROR(("%s: dhd->rx_napi_netdev is NULL\n", __FUNCTION__));
-		return;
-	}
-
-	DHD_LB_STATS_INCR(dhd->txc_sched_cnt);
-	/*
-	 * If the destination CPU is NOT online or is same as current CPU
-	 * no need to schedule the work
-	 */
-	curr_cpu = get_cpu();
-	put_cpu();
-
-	on_cpu = atomic_read(&dhd->tx_compl_cpu);
-
-	if ((on_cpu == curr_cpu) || (!cpu_online(on_cpu))) {
-		dhd_tasklet_schedule(&dhd->tx_compl_tasklet);
-	} else {
-		schedule_work(&dhd->tx_compl_dispatcher_work);
-	}
+	schedule_delayed_work_on(on_cpu, dwork, delay);
 }
-
-static void dhd_tx_compl_dispatcher_fn(struct work_struct * work)
-{
-	struct dhd_info *dhd =
-		container_of(work, struct dhd_info, tx_compl_dispatcher_work);
-	int cpu;
-
-	get_online_cpus();
-	cpu = atomic_read(&dhd->tx_compl_cpu);
-	if (!cpu_online(cpu))
-		dhd_tasklet_schedule(&dhd->tx_compl_tasklet);
-	else
-		dhd_tasklet_schedule_on(&dhd->tx_compl_tasklet, cpu);
-	put_online_cpus();
-}
-#endif /* DHD_LB_TXC */
-
-#if defined(DHD_LB_RXC)
-/**
- * dhd_lb_rx_compl_dispatch - load balance by dispatching the rx_compl_tasklet
- * on another cpu. The rx_compl_tasklet will take care of reposting rx buffers
- * in the H2D RxBuffer Post common ring, by using the recycled pktids that were
- * placed in the rx_compl workq.
- *
- * @dhdp: pointer to dhd_pub object
- */
-void
-dhd_lb_rx_compl_dispatch(dhd_pub_t *dhdp)
-{
-	dhd_info_t *dhd = dhdp->info;
-	int curr_cpu, on_cpu;
-
-	if (dhd->rx_napi_netdev == NULL) {
-		DHD_ERROR(("%s: dhd->rx_napi_netdev is NULL\n", __FUNCTION__));
-		return;
-	}
-
-	DHD_LB_STATS_INCR(dhd->rxc_sched_cnt);
-	/*
-	 * If the destination CPU is NOT online or is same as current CPU
-	 * no need to schedule the work
-	 */
-	curr_cpu = get_cpu();
-	put_cpu();
-	on_cpu = atomic_read(&dhd->rx_compl_cpu);
-
-	if ((on_cpu == curr_cpu) || (!cpu_online(on_cpu))) {
-		dhd_tasklet_schedule(&dhd->rx_compl_tasklet);
-	} else {
-		schedule_work(&dhd->rx_compl_dispatcher_work);
-	}
-}
-
-void dhd_rx_compl_dispatcher_fn(struct work_struct * work)
-{
-	struct dhd_info *dhd =
-		container_of(work, struct dhd_info, rx_compl_dispatcher_work);
-	int cpu;
-
-	get_online_cpus();
-	cpu = atomic_read(&dhd->rx_compl_cpu);
-	if (!cpu_online(cpu))
-		dhd_tasklet_schedule(&dhd->rx_compl_tasklet);
-	else {
-		dhd_tasklet_schedule_on(&dhd->rx_compl_tasklet, cpu);
-	}
-	put_online_cpus();
-}
-#endif /* DHD_LB_RXC */
 
 #if defined(DHD_LB_TXP)
 void dhd_tx_dispatcher_work(struct work_struct * work)
 {
-#if defined(STRICT_GCC_WARNINGS) && defined(__GNUC__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wcast-qual"
-#endif // endif
-	struct dhd_info *dhd =
-		container_of(work, struct dhd_info, tx_dispatcher_work);
-#if defined(STRICT_GCC_WARNINGS) && defined(__GNUC__)
-#pragma GCC diagnostic pop
-#endif // endif
+	struct dhd_info *dhd;
+
+	GCC_DIAGNOSTIC_PUSH_SUPPRESS_CAST();
+	dhd = container_of(work, struct dhd_info, tx_dispatcher_work);
+	GCC_DIAGNOSTIC_POP();
+
 	dhd_tasklet_schedule(&dhd->tx_tasklet);
-}
-
-void dhd_tx_dispatcher_fn(dhd_pub_t *dhdp)
-{
-	int cpu;
-	int net_tx_cpu;
-	dhd_info_t *dhd = dhdp->info;
-
-	preempt_disable();
-	cpu = atomic_read(&dhd->tx_cpu);
-	net_tx_cpu = atomic_read(&dhd->net_tx_cpu);
-
-	/*
-	 * Now if the NET_TX has pushed the packet in the same
-	 * CPU that is chosen for Tx processing, seperate it out
-	 * i.e run the TX processing tasklet in compl_cpu
-	 */
-	if (net_tx_cpu == cpu)
-		cpu = atomic_read(&dhd->tx_compl_cpu);
-
-	if (!cpu_online(cpu)) {
-		/*
-		 * Ooohh... but the Chosen CPU is not online,
-		 * Do the job in the current CPU itself.
-		 */
-		dhd_tasklet_schedule(&dhd->tx_tasklet);
-	} else {
-		/*
-		 * Schedule tx_dispatcher_work to on the cpu which
-		 * in turn will schedule tx_tasklet.
-		 */
-		dhd_work_schedule_on(&dhd->tx_dispatcher_work, cpu);
-	}
-	preempt_enable();
 }
 
 /**
@@ -942,19 +901,56 @@ dhd_lb_tx_dispatch(dhd_pub_t *dhdp)
 {
 	dhd_info_t *dhd = dhdp->info;
 	int curr_cpu;
+	int tx_cpu;
+	int prev_net_tx_cpu;
 
+	/*
+	 * Get cpu will disable pre-ermption and will not allow any cpu to go offline
+	 * and call put_cpu() only after scheduling rx_napi_dispatcher_work.
+	 */
 	curr_cpu = get_cpu();
-	put_cpu();
 
 	/* Record the CPU in which the TX request from Network stack came */
+	prev_net_tx_cpu = atomic_read(&dhd->net_tx_cpu);
 	atomic_set(&dhd->net_tx_cpu, curr_cpu);
 
-	/* Schedule the work to dispatch ... */
-	dhd_tx_dispatcher_fn(dhdp);
+	tx_cpu = atomic_read(&dhd->tx_cpu);
+
+	/*
+	 * Avoid cpu candidacy, if override is set via sysfs for changing cpu mannually
+	 */
+	if (dhd->dhd_lb_candidacy_override) {
+		if (!cpu_online(tx_cpu)) {
+			tx_cpu = curr_cpu;
+		}
+	} else {
+		/*
+		 * Now if the NET TX has scheduled in the same CPU
+		 * that is chosen for Tx processing
+		 * OR scheduled on different cpu than previously it was scheduled,
+		 * OR if tx_cpu is offline,
+		 * Call cpu candidacy algorithm to recompute tx_cpu.
+		 */
+		if ((curr_cpu == tx_cpu) || (curr_cpu != prev_net_tx_cpu) ||
+			!cpu_online(tx_cpu)) {
+			/* Re compute LB CPUs */
+			dhd_select_cpu_candidacy(dhd);
+			/* Use updated tx cpu */
+			tx_cpu = atomic_read(&dhd->tx_cpu);
+		}
+	}
+	/*
+	 * Schedule tx_dispatcher_work to on the cpu which
+	 * in turn will schedule tx_tasklet.
+	 */
+	dhd_work_schedule_on(&dhd->tx_dispatcher_work, tx_cpu);
+
+	put_cpu();
 }
 #endif /* DHD_LB_TXP */
 
 #if defined(DHD_LB_RXP)
+
 /**
  * dhd_napi_poll - Load balance napi poll function to process received
  * packets and send up the network stack using netif_receive_skb()
@@ -977,44 +973,88 @@ dhd_napi_poll(struct napi_struct *napi, int budget)
 	unsigned long flags;
 	struct dhd_info *dhd;
 	int processed = 0;
-	struct sk_buff_head rx_process_queue;
+	int dpc_cpu;
+#ifdef DHD_LB_STATS
+	uint32 napi_latency;
+#endif /* DHD_LB_STATS */
 
-#if defined(STRICT_GCC_WARNINGS) && defined(__GNUC__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wcast-qual"
-#endif // endif
+	GCC_DIAGNOSTIC_PUSH_SUPPRESS_CAST();
 	dhd = container_of(napi, struct dhd_info, rx_napi_struct);
-#if defined(STRICT_GCC_WARNINGS) && defined(__GNUC__)
-#pragma GCC diagnostic pop
-#endif // endif
+	GCC_DIAGNOSTIC_POP();
 
-	DHD_INFO(("%s napi_queue<%d> budget<%d>\n",
+#ifdef DHD_LB_STATS
+	napi_latency = (uint32)(OSL_SYSUPTIME_US() - dhd->napi_schedule_time);
+	dhd_lb_stats_update_napi_latency(dhd->napi_latency, napi_latency);
+#endif /* DHD_LB_STATS */
+	DHD_LB_INFO(("%s napi_queue<%d> budget<%d>\n",
 		__FUNCTION__, skb_queue_len(&dhd->rx_napi_queue), budget));
-		__skb_queue_head_init(&rx_process_queue);
 
-	/* extract the entire rx_napi_queue into local rx_process_queue */
-	spin_lock_irqsave(&dhd->rx_napi_queue.lock, flags);
-	skb_queue_splice_tail_init(&dhd->rx_napi_queue, &rx_process_queue);
-	spin_unlock_irqrestore(&dhd->rx_napi_queue.lock, flags);
+	/*
+	 * Extract the entire rx_napi_queue into another rx_process_queue
+	 * and process only 'budget' number of skbs from rx_process_queue.
+	 * If there are more items to be processed, napi poll will be rescheduled
+	 * During the next iteration, next set of skbs from
+	 * rx_napi_queue will be extracted and attached to the tail of rx_process_queue.
+	 * Again budget number of skbs will be processed from rx_process_queue.
+	 * If there are less than budget number of skbs in rx_process_queue,
+	 * call napi_complete to stop rescheduling napi poll.
+	 */
+	DHD_RX_NAPI_QUEUE_LOCK(&dhd->rx_napi_queue.lock, flags);
+	skb_queue_splice_tail_init(&dhd->rx_napi_queue, &dhd->rx_process_queue);
+	DHD_RX_NAPI_QUEUE_UNLOCK(&dhd->rx_napi_queue.lock, flags);
 
-	while ((skb = __skb_dequeue(&rx_process_queue)) != NULL) {
+	while ((processed < budget) && (skb = __skb_dequeue(&dhd->rx_process_queue)) != NULL) {
 		OSL_PREFETCH(skb->data);
 
 		ifid = DHD_PKTTAG_IFID((dhd_pkttag_fr_t *)PKTTAG(skb));
 
-		DHD_INFO(("%s dhd_rx_frame pkt<%p> ifid<%d>\n",
+		DHD_LB_INFO(("%s dhd_rx_frame pkt<%p> ifid<%d>\n",
 			__FUNCTION__, skb, ifid));
 
 		dhd_rx_frame(&dhd->pub, ifid, skb, pkt_count, chan);
 		processed++;
 	}
 
+	if (atomic_read(&dhd->pub.lb_rxp_flow_ctrl) &&
+		(dhd_lb_rxp_process_qlen(&dhd->pub) <= dhd->pub.lb_rxp_strt_thr)) {
+		/*
+		 * If the dpc CPU is online Schedule dhd_dpc_dispatcher_work on the dpc cpu which
+		 * in turn will schedule dpc tasklet. Else schedule dpc takslet.
+		 */
+		get_cpu();
+		dpc_cpu = atomic_read(&dhd->dpc_cpu);
+		if (!cpu_online(dpc_cpu)) {
+			dhd_tasklet_schedule(&dhd->tasklet);
+		} else {
+			dhd_delayed_work_schedule_on(&dhd->dhd_dpc_dispatcher_work, dpc_cpu, 0);
+		}
+		put_cpu();
+	}
 	DHD_LB_STATS_UPDATE_NAPI_HISTO(&dhd->pub, processed);
 
-	DHD_INFO(("%s processed %d\n", __FUNCTION__, processed));
-	napi_complete(napi);
+	DHD_LB_INFO(("%s processed %d\n", __FUNCTION__, processed));
 
-	return budget - 1;
+	/*
+	 * Signal napi complete only when no more packets are processed and
+	 * none are left in the enqueued queue.
+	 */
+	if ((processed == 0) && (skb_queue_len(&dhd->rx_napi_queue) == 0)) {
+		napi_complete(napi);
+#ifdef DHD_LB_STATS
+		dhd->pub.lb_rxp_napi_complete_cnt++;
+#endif /* DHD_LB_STATS */
+		DHD_GENERAL_LOCK(&dhd->pub, flags);
+		DHD_BUS_BUSY_CLEAR_IN_NAPI(&dhd->pub);
+		DHD_GENERAL_UNLOCK(&dhd->pub, flags);
+		return 0;
+	}
+
+#ifdef DHD_LB_STATS
+	dhd->napi_schedule_time = OSL_SYSUPTIME_US();
+#endif /* DHD_LB_STATS */
+
+	/* Return budget so that it gets rescheduled immediately */
+	return budget;
 }
 
 /**
@@ -1031,12 +1071,26 @@ static void
 dhd_napi_schedule(void *info)
 {
 	dhd_info_t *dhd = (dhd_info_t *)info;
+	unsigned long flags;
 
 	DHD_INFO(("%s rx_napi_struct<%p> on cpu<%d>\n",
 		__FUNCTION__, &dhd->rx_napi_struct, atomic_read(&dhd->rx_napi_cpu)));
 
 	/* add napi_struct to softnet data poll list and raise NET_RX_SOFTIRQ */
 	if (napi_schedule_prep(&dhd->rx_napi_struct)) {
+
+		/*
+		 * Set busbusystate in NAPI, which will be cleared after
+		 * napi_complete from napi_poll context
+		 */
+		DHD_GENERAL_LOCK(&dhd->pub, flags);
+		DHD_BUS_BUSY_SET_IN_NAPI(&dhd->pub);
+		DHD_GENERAL_UNLOCK(&dhd->pub, flags);
+
+#ifdef DHD_LB_STATS
+		dhd->napi_schedule_time = OSL_SYSUPTIME_US();
+		dhd->pub.lb_rxp_napi_sched_cnt++;
+#endif /* DHD_LB_STATS */
 		__napi_schedule(&dhd->rx_napi_struct);
 #ifdef WAKEUP_KSOFTIRQD_POST_NAPI_SCHEDULE
 		raise_softirq(NET_RX_SOFTIRQ);
@@ -1098,20 +1152,15 @@ dhd_napi_schedule_on(dhd_info_t *dhd, int on_cpu)
  *    work specific to this cpu is in progress
  *
  * According to the documentation calling get_online_cpus is NOT required, if
- * we are running from tasklet context. Since dhd_rx_napi_dispatcher_fn can
+ * we are running from tasklet context. Since dhd_rx_napi_dispatcher_work can
  * run from Work Queue context we have to call these functions
  */
-void dhd_rx_napi_dispatcher_fn(struct work_struct * work)
+void dhd_rx_napi_dispatcher_work(struct work_struct * work)
 {
-#if defined(STRICT_GCC_WARNINGS) && defined(__GNUC__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wcast-qual"
-#endif // endif
-	struct dhd_info *dhd =
-		container_of(work, struct dhd_info, rx_napi_dispatcher_work);
-#if defined(STRICT_GCC_WARNINGS) && defined(__GNUC__)
-#pragma GCC diagnostic pop
-#endif // endif
+	struct dhd_info *dhd;
+	GCC_DIAGNOSTIC_PUSH_SUPPRESS_CAST();
+	dhd = container_of(work, struct dhd_info, rx_napi_dispatcher_work);
+	GCC_DIAGNOSTIC_POP();
 
 	dhd_napi_schedule(dhd);
 }
@@ -1129,58 +1178,70 @@ dhd_lb_rx_napi_dispatch(dhd_pub_t *dhdp)
 	unsigned long flags;
 	dhd_info_t *dhd = dhdp->info;
 	int curr_cpu;
-	int on_cpu;
-#ifdef DHD_LB_IRQSET
-	cpumask_t cpus;
-#endif /* DHD_LB_IRQSET */
+	int rx_napi_cpu;
+	int prev_dpc_cpu;
 
 	if (dhd->rx_napi_netdev == NULL) {
 		DHD_ERROR(("%s: dhd->rx_napi_netdev is NULL\n", __FUNCTION__));
 		return;
 	}
 
-	DHD_INFO(("%s append napi_queue<%d> pend_queue<%d>\n", __FUNCTION__,
+	DHD_LB_INFO(("%s append napi_queue<%d> pend_queue<%d>\n", __FUNCTION__,
 		skb_queue_len(&dhd->rx_napi_queue), skb_queue_len(&dhd->rx_pend_queue)));
 
 	/* append the producer's queue of packets to the napi's rx process queue */
-	spin_lock_irqsave(&dhd->rx_napi_queue.lock, flags);
+	DHD_RX_NAPI_QUEUE_LOCK(&dhd->rx_napi_queue.lock, flags);
 	skb_queue_splice_tail_init(&dhd->rx_pend_queue, &dhd->rx_napi_queue);
-	spin_unlock_irqrestore(&dhd->rx_napi_queue.lock, flags);
+	DHD_RX_NAPI_QUEUE_UNLOCK(&dhd->rx_napi_queue.lock, flags);
 
-	DHD_LB_STATS_PERCPU_ARR_INCR(dhd->napi_percpu_run_cnt);
-
-	/* if LB RXP is disabled directly schedule NAPI */
-	if (atomic_read(&dhd->lb_rxp_active) == 0) {
+	/* If sysfs lb_rxp_active is not set, schedule on current cpu */
+	if (!atomic_read(&dhd->lb_rxp_active))
+	{
 		dhd_napi_schedule(dhd);
 		return;
 	}
 
 	/*
-	 * If the destination CPU is NOT online or is same as current CPU
-	 * no need to schedule the work
+	 * Get cpu will disable pre-ermption and will not allow any cpu to go offline
+	 * and call put_cpu() only after scheduling rx_napi_dispatcher_work.
 	 */
 	curr_cpu = get_cpu();
-	put_cpu();
 
-	preempt_disable();
-	on_cpu = atomic_read(&dhd->rx_napi_cpu);
-#ifdef DHD_LB_IRQSET
-	if (cpumask_and(&cpus, cpumask_of(curr_cpu), dhd->cpumask_primary) ||
-			(!cpu_online(on_cpu)))
-#else
-	if ((on_cpu == curr_cpu) || (!cpu_online(on_cpu)))
-#endif /* DHD_LB_IRQSET */
-	{
-		DHD_INFO(("%s : curr_cpu : %d, cpumask : 0x%lx\n", __FUNCTION__,
-			curr_cpu, *cpumask_bits(dhd->cpumask_primary)));
-		dhd_napi_schedule(dhd);
+	prev_dpc_cpu = atomic_read(&dhd->prev_dpc_cpu);
+
+	rx_napi_cpu = atomic_read(&dhd->rx_napi_cpu);
+
+	/*
+	 * Avoid cpu candidacy, if override is set via sysfs for changing cpu mannually
+	 */
+	if (dhd->dhd_lb_candidacy_override) {
+		if (!cpu_online(rx_napi_cpu)) {
+			rx_napi_cpu = curr_cpu;
+		}
 	} else {
-		DHD_INFO(("%s : schedule to curr_cpu : %d, cpumask : 0x%lx\n",
-			__FUNCTION__, curr_cpu, *cpumask_bits(dhd->cpumask_primary)));
-		dhd_work_schedule_on(&dhd->rx_napi_dispatcher_work, on_cpu);
-		DHD_LB_STATS_INCR(dhd->napi_sched_cnt);
+		/*
+		 * Now if the DPC has scheduled in the same CPU
+		 * that is chosen for Rx napi processing
+		 * OR scheduled on different cpu than previously it was scheduled,
+		 * OR if rx_napi_cpu is offline,
+		 * Call cpu candidacy algorithm to recompute napi_cpu.
+		 */
+		if ((curr_cpu == rx_napi_cpu) || (curr_cpu != prev_dpc_cpu) ||
+			!cpu_online(rx_napi_cpu)) {
+			/* Re compute LB CPUs */
+			dhd_select_cpu_candidacy(dhd);
+			/* Use updated napi cpu */
+			rx_napi_cpu = atomic_read(&dhd->rx_napi_cpu);
+		}
+
 	}
-	preempt_enable();
+
+	DHD_LB_INFO(("%s : schedule to curr_cpu : %d, rx_napi_cpu : %d\n",
+		__FUNCTION__, curr_cpu, rx_napi_cpu));
+	dhd_work_schedule_on(&dhd->rx_napi_dispatcher_work, rx_napi_cpu);
+	DHD_LB_STATS_INCR(dhd->napi_sched_cnt);
+
+	put_cpu();
 }
 
 /**
@@ -1191,46 +1252,31 @@ dhd_lb_rx_pkt_enqueue(dhd_pub_t *dhdp, void *pkt, int ifidx)
 {
 	dhd_info_t *dhd = dhdp->info;
 
-	DHD_INFO(("%s enqueue pkt<%p> ifidx<%d> pend_queue<%d>\n", __FUNCTION__,
+	DHD_LB_INFO(("%s enqueue pkt<%p> ifidx<%d> pend_queue<%d>\n", __FUNCTION__,
 		pkt, ifidx, skb_queue_len(&dhd->rx_pend_queue)));
 	DHD_PKTTAG_SET_IFID((dhd_pkttag_fr_t *)PKTTAG(pkt), ifidx);
 	__skb_queue_tail(&dhd->rx_pend_queue, pkt);
+	DHD_LB_STATS_PERCPU_ARR_INCR(dhd->napi_percpu_run_cnt);
+}
+
+unsigned long
+dhd_read_lb_rxp(dhd_pub_t *dhdp)
+{
+	dhd_info_t *dhd = dhdp->info;
+	return atomic_read(&dhd->lb_rxp_active);
+}
+
+uint32
+dhd_lb_rxp_process_qlen(dhd_pub_t *dhdp)
+{
+	dhd_info_t *dhd = dhdp->info;
+	return skb_queue_len(&dhd->rx_process_queue);
 }
 #endif /* DHD_LB_RXP */
-#endif /* DHD_LB */
-
-#if defined(DHD_LB_IRQSET) || defined(DHD_CONTROL_PCIE_CPUCORE_WIFI_TURNON)
-void
-dhd_irq_set_affinity(dhd_pub_t *dhdp, const struct cpumask *cpumask)
-{
-	unsigned int irq = (unsigned int)-1;
-	int err = BCME_OK;
-
-	if (!dhdp) {
-		DHD_ERROR(("%s : dhdp is NULL\n", __FUNCTION__));
-		return;
-	}
-
-	if (!dhdp->bus) {
-		DHD_ERROR(("%s : bus is NULL\n", __FUNCTION__));
-		return;
-	}
-
-	DHD_ERROR(("%s : irq set affinity cpu:0x%lx\n",
-			__FUNCTION__, *cpumask_bits(cpumask)));
-
-	dhdpcie_get_pcieirq(dhdp->bus, &irq);
-	err = irq_set_affinity(irq, cpumask);
-	if (err)
-		DHD_ERROR(("%s : irq set affinity is failed cpu:0x%lx\n",
-			__FUNCTION__, *cpumask_bits(cpumask)));
-}
-#endif /* DHD_LB_IRQSET || DHD_CONTROL_PCIE_CPUCORE_WIFI_TURNON */
 
 #if defined(DHD_LB_TXP)
-
-int BCMFASTPATH
-dhd_lb_sendpkt(dhd_info_t *dhd, struct net_device *net,
+int
+BCMFASTPATH(dhd_lb_sendpkt)(dhd_info_t *dhd, struct net_device *net,
 	int ifidx, void *skb)
 {
 	DHD_LB_STATS_PERCPU_ARR_INCR(dhd->tx_start_percpu_run_cnt);
@@ -1305,7 +1351,7 @@ dhd_lb_tx_process(dhd_info_t *dhd)
 
 	} while (1);
 
-	DHD_INFO(("%s(): Processed %d packets \r\n", __FUNCTION__, cnt));
+	DHD_LB_INFO(("%s(): Processed %d packets \r\n", __FUNCTION__, cnt));
 
 	return resched;
 }
@@ -1321,3 +1367,36 @@ dhd_lb_tx_handler(unsigned long data)
 }
 
 #endif /* DHD_LB_TXP */
+#endif /* DHD_LB */
+
+#if defined(DHD_CONTROL_PCIE_CPUCORE_WIFI_TURNON)
+void
+dhd_irq_set_affinity(dhd_pub_t *dhdp, const struct cpumask *cpumask)
+{
+	unsigned int irq = (unsigned int)-1;
+	int err = BCME_OK;
+
+	if (!dhdp) {
+		DHD_ERROR(("%s : dhdp is NULL\n", __FUNCTION__));
+		return;
+	}
+
+	if (!dhdp->bus) {
+		DHD_ERROR(("%s : bus is NULL\n", __FUNCTION__));
+		return;
+	}
+
+	DHD_ERROR(("%s : irq set affinity cpu:0x%lx\n",
+			__FUNCTION__, *cpumask_bits(cpumask)));
+
+	dhdpcie_get_pcieirq(dhdp->bus, &irq);
+#ifdef BCMDHD_MODULAR
+	err = irq_set_affinity_hint(irq, cpumask);
+#else
+	err = irq_set_affinity(irq, cpumask);
+#endif /* BCMDHD_MODULAR */
+	if (err)
+		DHD_ERROR(("%s : irq set affinity is failed cpu:0x%lx\n",
+				__FUNCTION__, *cpumask_bits(cpumask)));
+}
+#endif /* DHD_CONTROL_PCIE_CPUCORE_WIFI_TURNON */

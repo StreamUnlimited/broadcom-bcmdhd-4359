@@ -2,7 +2,7 @@
  * Definitions for API from sdio common code (bcmsdh) to individual
  * host controller drivers.
  *
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -18,22 +18,22 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
  *
- *
- * <<Broadcom-WL-IPTag/Open:>>
- *
- * $Id: bcmsdbus.h 689948 2017-03-14 05:21:03Z $
+ * <<Broadcom-WL-IPTag/Dual:>>
  */
 
 #ifndef	_sdio_api_h_
 #define	_sdio_api_h_
 
-#if defined(BT_OVER_SDIO)
+#if defined (BT_OVER_SDIO)
 #include <linux/mmc/sdio_func.h>
 #endif /* defined (BT_OVER_SDIO) */
+
+/*
+ * The following were:
+ *	incorrectly in bcmsdio.h
+ *	incorrectly named using SDIOH which indicates BRCM SDIO FPGA host controller
+ */
 
 #define SDIOH_API_RC_SUCCESS                          (0x00)
 #define SDIOH_API_RC_FAIL	                      (0x01)
@@ -72,7 +72,7 @@
 #warning "SDPCM_DEFGLOM_SIZE cannot be higher than SDPCM_MAXGLOM_SIZE!!"
 #undef SDPCM_DEFGLOM_SIZE
 #define SDPCM_DEFGLOM_SIZE SDPCM_MAXGLOM_SIZE
-#endif // endif
+#endif
 
 #ifdef PKT_STATICS
 typedef struct pkt_statics {
@@ -99,7 +99,7 @@ typedef struct sdioh_info sdioh_info_t;
 
 /* callback function, taking one arg */
 typedef void (*sdioh_cb_fn_t)(void *);
-#if defined(BT_OVER_SDIO)
+#if defined (BT_OVER_SDIO)
 extern
 void sdioh_sdmmc_card_enable_func_f3(sdioh_info_t *sd, struct sdio_func *func);
 #endif /* defined (BT_OVER_SDIO) */
@@ -113,9 +113,9 @@ extern SDIOH_API_RC sdioh_interrupt_query(sdioh_info_t *si, bool *onoff);
 /* enable or disable SD interrupt */
 extern SDIOH_API_RC sdioh_interrupt_set(sdioh_info_t *si, bool enable_disable);
 
-#if defined(DHD_DEBUG)
+#if defined(DHD_DEBUG) || defined(BCMDBG)
 extern bool sdioh_interrupt_pending(sdioh_info_t *si);
-#endif // endif
+#endif
 
 /* read or write one byte using cmd52 */
 extern SDIOH_API_RC sdioh_request_byte(sdioh_info_t *si, uint rw, uint fnc, uint addr, uint8 *byte);
@@ -141,7 +141,7 @@ extern uint sdioh_query_iofnum(sdioh_info_t *si);
 
 /* handle iovars */
 extern int sdioh_iovar_op(sdioh_info_t *si, const char *name,
-                          void *params, int plen, void *arg, int len, bool set);
+                          void *params, int plen, void *arg, uint len, bool set);
 
 /* Issue abort to the specified function and clear controller as needed */
 extern int sdioh_abort(sdioh_info_t *si, uint fnc);
@@ -166,8 +166,12 @@ extern void sdioh_dwordmode(sdioh_info_t *si, bool set);
 #endif /* BCMSPI */
 
 #if defined(BCMSDIOH_STD)
+	/*
+	 * Only STD host supports cmd14 sleep.
+	 * Using define instead of empty stubs for other hosts for now.
+	 */
 	#define SDIOH_SLEEP_ENABLED
-#endif // endif
+#endif
 extern SDIOH_API_RC sdioh_sleep(sdioh_info_t *si, bool enab);
 
 /* GPIO support */

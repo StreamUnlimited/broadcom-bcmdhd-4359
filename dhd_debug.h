@@ -1,9 +1,7 @@
 /*
  * DHD debugability header file
  *
- * <<Broadcom-WL-IPTag/Open:>>
- *
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -19,11 +17,10 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_debug.h 783721 2018-10-08 13:05:26Z $
+ * <<Broadcom-WL-IPTag/Open:>>
+ *
+ * $Id$
  */
 
 #ifndef _dhd_debug_h_
@@ -31,14 +28,6 @@
 #include <event_log.h>
 #include <bcmutils.h>
 #include <dhd_dbg_ring.h>
-
-enum {
-	DEBUG_RING_ID_INVALID	= 0,
-	FW_VERBOSE_RING_ID,
-	DHD_EVENT_RING_ID,
-	/* add new id here */
-	DEBUG_RING_ID_MAX
-};
 
 enum {
 	/* Feature set */
@@ -74,10 +63,27 @@ enum {
 #define NAN_EVENT_RING_NAME		"nan_event"
 #define NAN_EVENT_RING_SIZE		(64 * 1024)
 
+#ifdef DHD_DEBUGABILITY_LOG_DUMP_RING
+/* DHD driver log ring */
+#define DRIVER_LOG_RING_NAME		"driver_log"
+#define DRIVER_LOG_RING_SIZE		(256 * 1024)
+/* ROAM stats log ring */
+#define ROAM_STATS_RING_NAME		"roam_stats"
+#define ROAM_STATS_RING_SIZE		(64 * 1024)
+#endif /* DHD_DEBUGABILITY_LOG_DUMP_RING */
+
+#ifdef BTLOG
+/* BT log ring, ring id 5 */
+#define BT_LOG_RING_NAME		"bt_log"
+#define BT_LOG_RING_SIZE		(64 * 1024)
+#endif	/* BTLOG */
+
 #define TLV_LOG_SIZE(tlv) ((tlv) ? (sizeof(tlv_log) + (tlv)->len) : 0)
 
 #define TLV_LOG_NEXT(tlv) \
 	((tlv) ? ((tlv_log *)((uint8 *)tlv + TLV_LOG_SIZE(tlv))) : 0)
+
+#define DBG_RING_STATUS_SIZE (sizeof(dhd_dbg_ring_status_t))
 
 #define VALID_RING(id)	\
 	((id > DEBUG_RING_ID_INVALID) && (id < DEBUG_RING_ID_MAX))
@@ -284,11 +290,16 @@ typedef struct per_packet_status_entry {
     uint8 *data;
 } per_packet_status_entry_t;
 
+#if defined(LINUX)
 #define PACKED_STRUCT __attribute__ ((packed))
+#else
+#define PACKED_STRUCT
+#endif
 
+#if defined(LINUX)
 typedef struct log_conn_event {
     uint16 event;
-    tlv_log *tlvs;
+    tlv_log tlvs[0];
 	/*
 	* separate parameter structure per event to be provided and optional data
 	* the event_data is expected to include an official android part, with some
@@ -297,6 +308,7 @@ typedef struct log_conn_event {
 	* understood by the developer only.
 	*/
 } PACKED_STRUCT log_conn_event_t;
+#endif /* defined(LINUX) */
 
 /*
  * Ring buffer name for power events ring. note that power event are extremely frequents
@@ -338,6 +350,7 @@ struct log_level_table {
 	char *desc;
 };
 
+#ifdef OEM_ANDROID
 /*
  * Assuming that the Ring lock is mutex, bailing out if the
  * callers are from atomic context. On a long term, one has to
@@ -353,6 +366,14 @@ struct log_level_table {
 				&state, sizeof(state));				\
 	} while (0);								\
 }
+#else
+#define DBG_EVENT_LOG(dhd, connect_state)
+#endif /* !OEM_ANDROID */
+
+/*
+ * Packet logging - HAL specific data
+ * XXX: These should be moved to wl_cfgvendor.h
+ */
 
 #define MD5_PREFIX_LEN				4
 #define MAX_FATE_LOG_LEN			32
@@ -441,6 +462,9 @@ typedef enum {
 
 	/* Dropped by driver for any other reason. */
 	RX_PKT_FATE_DRV_DROP_OTHER,
+
+	/* Indicate RX Host Wake up packet. */
+	RX_PKT_FATE_WAKE_PKT,
 
 	} wifi_rx_packet_fate;
 
@@ -759,6 +783,9 @@ void dhd_dbg_msgtrace_log_parser(dhd_pub_t *dhdp, void *event_data,
 	void *raw_event_ptr, uint datalen, bool msgtrace_hdr_present,
 	uint32 msgtrace_seqnum);
 
+#ifdef BTLOG
+extern void dhd_dbg_bt_log_handler(dhd_pub_t *dhdp, void *data, uint datalen);
+#endif	/* BTLOG */
 extern int dhd_dbg_attach(dhd_pub_t *dhdp, dbg_pullreq_t os_pullreq,
 	dbg_urgent_noti_t os_urgent_notifier, void *os_priv);
 extern void dhd_dbg_detach(dhd_pub_t *dhdp);
@@ -849,4 +876,16 @@ extern void dhd_iov_li_delete(dhd_pub_t *dhd, dll_t *list_head);
 #ifdef DHD_DEBUG
 extern void dhd_mw_list_delete(dhd_pub_t *dhd, dll_t *list_head);
 #endif /* DHD_DEBUG */
+
+void print_roam_enhanced_log(prcd_event_log_hdr_t *plog_hdr);
+
+typedef void (*print_roam_enhance_log_func)(prcd_event_log_hdr_t *plog_hdr);
+typedef struct _pr_roam_tbl {
+	uint8 version;
+	uint8 id;
+	print_roam_enhance_log_func pr_func;
+} pr_roam_tbl_t;
+
+extern uint32 dhd_dbg_get_fwverbose(dhd_pub_t *dhdp);
+extern void dhd_dbg_set_fwverbose(dhd_pub_t *dhdp, uint32 new_val);
 #endif /* _dhd_debug_h_ */

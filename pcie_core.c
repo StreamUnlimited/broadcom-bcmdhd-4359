@@ -3,7 +3,7 @@
  * Contains PCIe related functions that are shared between different driver models (e.g. firmware
  * builds, DHD builds, BMAC builds), in order to avoid code duplication.
  *
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -19,17 +19,10 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
  *
- *
- * <<Broadcom-WL-IPTag/Open:>>
- *
- * $Id: pcie_core.c 769591 2018-06-27 00:08:22Z $
+ * <<Broadcom-WL-IPTag/Dual:>>
  */
 
-#include <bcm_cfg.h>
 #include <typedefs.h>
 #include <bcmutils.h>
 #include <bcmdefs.h>
@@ -38,7 +31,12 @@
 #include <hndsoc.h>
 #include <sbchipc.h>
 #include <pcicfg.h>
+#if defined(DONGLEBUILD)
+#include <pcieregsoffs.h>
+#include <pcicfg.h>
+#endif
 #include "pcie_core.h"
+#include <bcmdevs.h>
 
 /* local prototypes */
 
@@ -46,8 +44,27 @@
 
 /* function definitions */
 
-#ifdef BCMDRIVER
+#ifdef BCMDRIVER /* this workaround can only be run on the host side since it resets the chip */
+#if !defined(DONGLEBUILD) || defined(BCMSTANDALONE_TEST)
 
+/* To avoid build error for dongle standalone test, define CAN_SLEEP if not defined */
+#ifndef CAN_SLEEP
+#define CAN_SLEEP()	(FALSE)
+#endif
+
+#ifndef USEC_PER_MSEC
+#define USEC_PER_MSEC	1000
+#endif
+
+/**
+ * WAR for CRWLPCIEGEN2-163, needed for all the chips at this point.
+ * The PCIe core contains a 'snoop bus', that allows the logic in the PCIe core to read and write
+ * to the PCIe configuration registers. When chip backplane reset hits, e.g. on driver unload, the
+ * pcie snoop out will reset to default values and may get out of sync with pcie config registers.
+ * This is causing failures because the LTR enable bit on the snoop bus gets out of sync. Also on
+ * the snoop bus are the device power state, MSI info, L1subenable which may potentially cause
+ * problems.
+ */
 /* wd_mask/wd_val is only for chipc_corerev >= 65 */
 void pcie_watchdog_reset(osl_t *osh, si_t *sih, uint32 wd_mask, uint32 wd_val)
 {
@@ -61,13 +78,28 @@ void pcie_watchdog_reset(osl_t *osh, si_t *sih, uint32 wd_mask, uint32 wd_val)
 	sbpcieregs_t *pcieregs = NULL;
 	uint32 origidx = si_coreidx(sih);
 
+#if defined(BCMQT) || defined(BCMFPGA_HW)
+	/*
+	 * JIRA : SWWLAN-283651, 4397A0 WAR : During insmod avoid existing
+	 * PCIE WAR to avoid 'pcie_watchdog_reset'
+	 */
+	if (BCM4397_CHIP(sih->chip)) {
+		return;
+	}
+
+	/* To avoid hang on FPGA, donot reset watchdog */
+	if (CCREV(sih->ccrev) < 65) {
+		si_setcoreidx(sih, origidx);
+		return;
+	}
+#endif
 #ifdef BCMFPGA_HW
-		if (CCREV(sih->ccrev) < 67) {
-			/* To avoid hang on FPGA, donot reset watchdog */
-			si_setcoreidx(sih, origidx);
-			return;
-		}
-#endif // endif
+	if (CCREV(sih->ccrev) < 67) {
+		/* To avoid hang on FPGA, donot reset watchdog */
+		si_setcoreidx(sih, origidx);
+		return;
+	}
+#endif
 
 	/* Switch to PCIE2 core */
 	pcieregs = (sbpcieregs_t *)si_setcore(sih, PCIE2_CORE_ID, 0);
@@ -83,11 +115,7 @@ void pcie_watchdog_reset(osl_t *osh, si_t *sih, uint32 wd_mask, uint32 wd_val)
 	if (CCREV(sih->ccrev) >= 65) {
 		si_corereg(sih, SI_CC_IDX, OFFSETOF(chipcregs_t, watchdog), wd_mask, wd_val);
 		si_corereg(sih, SI_CC_IDX, OFFSETOF(chipcregs_t, watchdog), WD_COUNTER_MASK, 4);
-#ifdef BCMQT_HW
-		OSL_DELAY(2000 * 4000);
-#else
-		OSL_DELAY(2000); /* 2 ms */
-#endif // endif
+		CAN_SLEEP() ? OSL_SLEEP(2) : OSL_DELAY(2 * USEC_PER_MSEC); /* 2 ms */
 		val = si_corereg(sih, SI_CC_IDX, OFFSETOF(chipcregs_t, intstatus), 0, 0);
 		si_corereg(sih, SI_CC_IDX, OFFSETOF(chipcregs_t, intstatus),
 			wd_mask, val & wd_mask);
@@ -95,7 +123,7 @@ void pcie_watchdog_reset(osl_t *osh, si_t *sih, uint32 wd_mask, uint32 wd_val)
 		si_corereg_writeonly(sih, SI_CC_IDX, OFFSETOF(chipcregs_t, watchdog), ~0, 4);
 		/* Read a config space to make sure the above write gets flushed on PCIe bus */
 		val = OSL_PCI_READ_CONFIG(osh, PCI_CFG_VID, sizeof(uint32));
-		OSL_DELAY(100000);
+		CAN_SLEEP() ? OSL_SLEEP(100) : OSL_DELAY(100 * USEC_PER_MSEC); /* 100 ms */
 	}
 
 	W_REG(osh, &pcieregs->configaddr, PCIECFGREG_LINK_STATUS_CTRL);
@@ -155,4 +183,45 @@ void pcie_set_trefup_time_100us(si_t *sih)
 		OFFSETOF(sbpcieregs_t, configdata), PCIE_PMCR_REFEXT_MASK, PCIE_PMCR_REFEXT_100US);
 }
 
+uint32
+pcie_cto_to_thresh_default(uint corerev)
+{
+	return REV_GE_69(corerev) ?
+			PCIE_CTO_TO_THRESH_DEFAULT_REV69 : PCIE_CTO_TO_THRESH_DEFAULT;
+}
+
+uint32
+pcie_corereg(osl_t *osh, volatile void *regs, uint32 offset, uint32 mask, uint32 val)
+{
+	volatile uint32 *regsva =
+		(volatile uint32 *)((volatile char *)regs + PCI_16KB0_PCIREGS_OFFSET + offset);
+
+	if (mask || val) {
+		uint32 w = R_REG(osh, regsva);
+		w &= ~mask;
+		w |= val;
+		W_REG(osh, regsva, w);
+	}
+	return (R_REG(osh, regsva));
+}
+#endif /* !defined(DONGLEBUILD) || defined(BCMSTANDALONE_TEST) */
+
+#if defined(DONGLEBUILD)
+void  pcie_coherent_accenable(osl_t *osh, si_t *sih)
+{
+	pcieregs_t *pcie = NULL;
+	uint32 val;
+	uint32 origidx = si_coreidx(sih);
+
+	if ((pcie = si_setcore(sih, PCIE2_CORE_ID, 0)) != NULL) {
+		/* PCIe BAR1 coherent access enabled */
+		W_REG(osh, PCIE_configindaddr_ALTBASE(pcie, 0), PCIECFGREG_SPROM_CTRL);
+		val = R_REG(osh, PCIE_configinddata_ALTBASE(pcie, 0));
+		val |= (SPROM_BAR1_COHERENT_ACC_EN | SPROM_BAR2_COHERENT_ACC_EN);
+		W_REG(osh, PCIE_configinddata_ALTBASE(pcie, 0), val);
+	}
+
+	si_setcoreidx(sih, origidx);
+}
+#endif /* DONGLEBUILD */
 #endif /* BCMDRIVER */

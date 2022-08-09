@@ -1,7 +1,7 @@
 /*
  * TRX image file header format.
  *
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -17,14 +17,8 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
  *
- *
- * <<Broadcom-WL-IPTag/Open:>>
- *
- * $Id: trxhdr.h 520026 2014-12-10 01:29:40Z $
+ * <<Broadcom-WL-IPTag/Dual:>>
  */
 
 #ifndef _TRX_HDR_H
@@ -47,7 +41,7 @@
 #ifndef BCMTRXV2
 #define TRX_VERSION	TRX_V1		/* Version 1 */
 #define TRX_MAX_OFFSET TRX_V1_MAX_OFFSETS
-#endif // endif
+#endif
 
 /* BMAC Host driver/application like bcmdl need to support both Ver 1 as well as
  * Ver 2 of trx header. To make it generic, trx_header is structure is modified
@@ -66,7 +60,7 @@ struct trx_header {
 	uint32 offsets[TRX_MAX_OFFSET];	/* Offsets of partitions from start of header */
 #else
 	uint32 offsets[1];	/* Offsets of partitions from start of header */
-#endif // endif
+#endif
 };
 
 #ifdef BCMTRXV2
@@ -80,7 +74,11 @@ struct trx_header {
 #define TRX_V2_MAX_OFFSETS	5
 #define SIZEOF_TRXHDR_V1	(sizeof(struct trx_header)+(TRX_V1_MAX_OFFSETS-1)*sizeof(uint32))
 #define SIZEOF_TRXHDR_V2	(sizeof(struct trx_header)+(TRX_V2_MAX_OFFSETS-1)*sizeof(uint32))
+#ifdef IL_BIGENDIAN
+#define TRX_VER(trx)		(ltoh32((trx)->flag_version>>16))
+#else
 #define TRX_VER(trx)		((trx)->flag_version>>16)
+#endif
 #define ISTRX_V1(trx)		(TRX_VER(trx) == TRX_V1)
 #define ISTRX_V2(trx)		(TRX_VER(trx) == TRX_V2)
 /* For V2, return size of V2 size: others, return V1 size */

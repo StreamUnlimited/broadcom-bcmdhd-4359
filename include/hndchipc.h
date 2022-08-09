@@ -1,7 +1,7 @@
 /*
  * HND SiliconBackplane chipcommon support - OS independent.
  *
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -17,14 +17,8 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
  *
- *
- * <<Broadcom-WL-IPTag/Open:>>
- *
- * $Id: hndchipc.h 689775 2017-03-13 12:37:05Z $
+ * <<Broadcom-WL-IPTag/Dual:>>
  */
 
 #ifndef _hndchipc_h_
@@ -37,11 +31,11 @@
 typedef void (*si_serial_init_fn)(si_t *sih, void *regs, uint irq, uint baud_base, uint reg_shift);
 #else
 typedef void (*si_serial_init_fn)(void *regs, uint irq, uint baud_base, uint reg_shift);
-#endif // endif
+#endif
 extern void si_serial_init(si_t *sih, si_serial_init_fn add);
 
-extern volatile void *hnd_jtagm_init(si_t *sih, uint clkd, bool exttap);
-extern void hnd_jtagm_disable(si_t *sih, volatile void *h);
+extern volatile void *hnd_jtagm_init(si_t *sih, uint clkd, bool exttap, uint32 *prev_jtagctrl);
+extern void hnd_jtagm_disable(si_t *sih, volatile void *h, uint32 *prev_jtagctrl);
 extern uint32 jtag_scan(si_t *sih, volatile void *h, uint irsz, uint32 ir0, uint32 ir1,
                         uint drsz, uint32 dr0, uint32 *dr1, bool rti);
 extern uint32 jtag_read_128(si_t *sih, volatile void *h, uint irsz, uint32 ir0, uint drsz,

@@ -1,7 +1,7 @@
 /*
  * HND generic pktq operation primitives
  *
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -17,40 +17,35 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
  *
- *
- * <<Broadcom-WL-IPTag/Open:>>
- *
- * $Id: hnd_pktq.h 698847 2017-05-11 00:10:48Z $
+ * <<Broadcom-WL-IPTag/Dual:>>
  */
 
 #ifndef _hnd_pktq_h_
 #define _hnd_pktq_h_
 
+#include <osl.h>
 #include <osl_ext.h>
 
 #ifdef __cplusplus
 extern "C" {
-#endif // endif
+#endif
 
 /* mutex macros for thread safe */
 #ifdef HND_PKTQ_THREAD_SAFE
 #define HND_PKTQ_MUTEX_DECL(mutex)		OSL_EXT_MUTEX_DECL(mutex)
 #else
 #define HND_PKTQ_MUTEX_DECL(mutex)
-#endif // endif
+#endif
 
 /* osl multi-precedence packet queue */
-#define PKTQ_LEN_MAX            0xFFFF  /* Max uint16 65535 packets */
+#define PKTQ_LEN_MAX            0xFFFFu  /* Max uint16 65535 packets */
 #ifndef PKTQ_LEN_DEFAULT
-#define PKTQ_LEN_DEFAULT        128	/* Max 128 packets */
-#endif // endif
+#define PKTQ_LEN_DEFAULT        128u	/* Max 128 packets */
+#endif
 #ifndef PKTQ_MAX_PREC
 #define PKTQ_MAX_PREC           16	/* Maximum precedence levels */
-#endif // endif
+#endif
 
 /** Queue for a single precedence level */
 typedef struct pktq_prec {
@@ -112,17 +107,14 @@ typedef struct {
 typedef struct pktq_log pktq_log_t;
 #endif /* PKTQ_LOG */
 
-#define PKTQ_COMMON	\
-	HND_PKTQ_MUTEX_DECL(mutex)							\
-	pktq_log_t *pktqlog;								\
-	uint16 num_prec;        /**< number of precedences in use */			\
-	uint16 hi_prec;         /**< rapid dequeue hint (>= highest non-empty prec) */	\
-	uint16 max_pkts;        /**< max  packets */	\
-	uint16 n_pkts_tot;      /**< total (cummulative over all precedences) number of packets */
-
 /** multi-priority packet queue */
 struct pktq {
-	PKTQ_COMMON
+	HND_PKTQ_MUTEX_DECL(mutex)
+	pktq_log_t *pktqlog;
+	uint16 num_prec;        /**< number of precedences in use */
+	uint16 hi_prec;         /**< rapid dequeue hint (>= highest non-empty prec) */
+	uint16 max_pkts;        /**< max  packets */
+	uint16 n_pkts_tot;      /**< total (cummulative over all precedences) number of packets */
 	/* q array must be last since # of elements can be either PKTQ_MAX_PREC or 1 */
 	struct pktq_prec q[PKTQ_MAX_PREC];
 };
@@ -193,12 +185,12 @@ typedef void (*defer_free_pkt_fn_t)(void *ctx, void *pkt);
  */
 typedef void (*flush_free_pkt_fn_t)(void *ctx);
 
-#if defined(WLAMPDU_MAC) && defined(PROP_TXSTATUS)
+#if defined(PROP_TXSTATUS)
 /* this callback will be invoked when in low_txq_scb flush()
  *  two back-to-back pkts has same epoch value.
  */
 typedef void (*flip_epoch_t)(void *ctx, void *pkt, uint8 *flipEpoch, uint8 *lastEpoch);
-#endif /* defined(WLAMPDU_MAC) && defined(PROP_TXSTATUS) */
+#endif /* defined(PROP_TXSTATUS) */
 
 /** filter a pktq, using the caller supplied filter/deposition/flush functions */
 extern void  pktq_filter(struct pktq *pq, pktq_filter_t fn, void* arg,
@@ -239,9 +231,11 @@ extern void *pktq_pdeq_tail(struct pktq *pq, int prec);
 extern bool pktq_pdel(struct pktq *pq, void *p, int prec);
 
 /* For single precedence queues */
+extern void *spktq_enq_chain(struct spktq *dspq, struct spktq *sspq);
 extern void *spktq_enq(struct spktq *spq, void *p);
 extern void *spktq_enq_head(struct spktq *spq, void *p);
 extern void *spktq_deq(struct spktq *spq);
+extern void *spktq_deq_virt(struct spktq *spq);
 extern void *spktq_deq_tail(struct spktq *spq);
 
 /* operations on a set of precedences in packet queue */
@@ -298,12 +292,14 @@ extern bool spktq_full(struct spktq *spq);
 
 #define spktqfilter(spq, fltr, fltr_ctx, defer, defer_ctx, flush, flush_ctx) \
 	spktq_filter((spq), (fltr), (fltr_ctx), (defer), (defer_ctx), (flush), (flush_ctx))
-extern bool pktq_init(struct pktq *pq, int num_prec, int max_pkts);
+extern bool pktq_init(struct pktq *pq, int num_prec, uint max_pkts);
 extern bool pktq_deinit(struct pktq *pq);
-extern bool spktq_init(struct spktq *spq, int max_pkts);
+extern bool spktq_init(struct spktq *spq, uint max_pkts);
+extern bool spktq_init_list(struct spktq *spq, uint max_pkts,
+	void *head, void *tail, uint16 n_pkts);
 extern bool spktq_deinit(struct spktq *spq);
 
-extern void pktq_set_max_plen(struct pktq *pq, int prec, int max_pkts);
+extern void pktq_set_max_plen(struct pktq *pq, int prec, uint max_pkts);
 
 /* prec_out may be NULL if caller is not interested in return value */
 extern void *pktq_deq(struct pktq *pq, int *prec_out);
@@ -314,12 +310,21 @@ extern void *pktq_peek_tail(struct pktq *pq, int *prec_out);
 
 /** flush pktq */
 extern void pktq_flush(osl_t *osh, struct pktq *pq, bool dir);
-extern void spktq_flush(osl_t *osh, struct spktq *spq, bool dir);
+/* single precedence queue with callback before deleting a packet */
+extern void spktq_flush_ext(osl_t *osh, struct spktq *spq, bool dir,
+	void (*pktq_flush_cb)(void *ctx, void *pkt), void *pktq_flush_ctx);
+/* single precedence queue */
+#define spktq_flush(osh, spq, dir) spktq_flush_ext(osh, spq, dir, NULL, NULL)
 /** Empty the queue at particular precedence level */
 extern void pktq_pflush(osl_t *osh, struct pktq *pq, int prec, bool dir);
 
+typedef void (*spktq_cb_t)(void *arg, struct spktq *spq);
+extern void spktq_free_register(spktq_cb_t cb, void *arg);
+extern void spktq_cb(void *spq);
+#define SPKTQFREE	spktq_cb
+
 #ifdef __cplusplus
 }
-#endif // endif
+#endif
 
 #endif /* _hnd_pktq_h_ */

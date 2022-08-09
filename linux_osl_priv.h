@@ -1,7 +1,7 @@
 /*
  * Private header file for Linux OS Independent Layer
  *
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -17,18 +17,14 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
  *
- *
- * <<Broadcom-WL-IPTag/Open:>>
- *
- * $Id: linux_osl_priv.h 794159 2018-12-12 07:41:14Z $
+ * <<Broadcom-WL-IPTag/Dual:>>
  */
 
 #ifndef _LINUX_OSL_PRIV_H_
 #define _LINUX_OSL_PRIV_H_
+
+#include <osl.h>
 
 #define OS_HANDLE_MAGIC		0x1234abcd	/* Magic # to recognize osh */
 #define BCM_MEM_FILENAME_LEN	24		/* Mem. filename length */
@@ -37,6 +33,21 @@
 #if !defined(BCMPCIE) && defined(DHD_USE_STATIC_CTRLBUF)
 #error "DHD_USE_STATIC_CTRLBUF suppored PCIE target only"
 #endif /* !BCMPCIE && DHD_USE_STATIC_CTRLBUF */
+
+#define OSL_MEMLIST_LOCK(lock, flags)	(flags) = osl_spin_lock(lock)
+#define OSL_MEMLIST_UNLOCK(lock, flags)	osl_spin_unlock((lock), (flags))
+
+#define OSL_STATIC_BUF_LOCK(lock, flags)	(flags) = osl_spin_lock(lock)
+#define OSL_STATIC_BUF_UNLOCK(lock, flags)	osl_spin_unlock((lock), (flags))
+
+#define OSL_STATIC_PKT_LOCK(lock, flags)	(flags) = osl_spin_lock(lock)
+#define OSL_STATIC_PKT_UNLOCK(lock, flags)	osl_spin_unlock((lock), (flags))
+
+#define OSL_PKTLIST_LOCK(lock, flags)	(flags) = osl_spin_lock(lock)
+#define OSL_PKTLIST_UNLOCK(lock, flags)	osl_spin_unlock((lock), (flags))
+
+#define OSL_CTRACE_LOCK(lock, flags)	(flags) = osl_spin_lock(lock)
+#define OSL_CTRACE_UNLOCK(lock, flags)	osl_spin_unlock((lock), (flags))
 
 #ifdef CONFIG_DHD_USE_STATIC_BUF
 #ifdef DHD_USE_STATIC_CTRLBUF
@@ -78,7 +89,8 @@ extern bcm_static_buf_t *bcm_static_buf;
 
 #ifdef DHD_USE_STATIC_CTRLBUF
 #define STATIC_PKT_1PAGE_NUM	0
-#define STATIC_PKT_2PAGE_NUM	128
+/* Should match DHD_SKB_2PAGE_BUF_NUM */
+#define STATIC_PKT_2PAGE_NUM	192
 #else
 #define STATIC_PKT_1PAGE_NUM	8
 #define STATIC_PKT_2PAGE_NUM	8
@@ -114,7 +126,7 @@ typedef struct bcm_mem_link {
 	struct bcm_mem_link *next;
 	uint	size;
 	int	line;
-	void 	*osh;
+	void	*osh;
 	char	file[BCM_MEM_FILENAME_LEN];
 } bcm_mem_link_t;
 
@@ -124,14 +136,18 @@ struct osl_cmn_info {
 	spinlock_t dbgmem_lock;
 	bcm_mem_link_t *dbgmem_list;
 	bcm_mem_link_t *dbgvmem_list;
+#ifdef BCMDBG_PKT    /* pkt logging for debugging */
+	spinlock_t pktlist_lock;
+	pktlist_info_t pktlist;
+#endif  /* BCMDBG_PKT */
 	spinlock_t pktalloc_lock;
 	atomic_t refcount; /* Number of references to this shared structure. */
 };
 typedef struct osl_cmn_info osl_cmn_t;
 
-#if defined(BCM_BACKPLANE_TIMEOUT)
+#if defined(AXI_TIMEOUTS_NIC)
 typedef uint32 (*bpt_cb_fn)(void *ctx, void *addr);
-#endif	/* BCM_BACKPLANE_TIMEOUT */
+#endif	/* AXI_TIMEOUTS_NIC */
 
 struct osl_info {
 	osl_pubinfo_t pub;
@@ -142,35 +158,20 @@ struct osl_info {
 	uint bustype;
 	osl_cmn_t *cmn; /* Common OSL related data shred between two OSH's */
 
+	/* for host drivers, a bus handle is needed when reading from and/or writing to dongle
+	 * registeres, however ai/si utilities only passes osh handle to R_REG and W_REG. as
+	 * a work around, save the bus handle here
+	 */
 	void *bus_handle;
-#ifdef	BCM_SECURE_DMA
-#ifdef NOT_YET
-	struct sec_mem_elem *sec_list_512;
-	struct sec_mem_elem *sec_list_base_512;
-	struct sec_mem_elem *sec_list_2048;
-	struct sec_mem_elem *sec_list_base_2048;
-#endif /* NOT_YET */
-	struct sec_mem_elem *sec_list_4096;
-	struct sec_mem_elem *sec_list_base_4096;
-	phys_addr_t  contig_base;
-	void *contig_base_va;
-	phys_addr_t  contig_base_alloc;
-	void *contig_base_alloc_va;
-	phys_addr_t contig_base_alloc_coherent;
-	void *contig_base_alloc_coherent_va;
-	void *contig_base_coherent_va;
-	void *contig_delta_va_pa;
-	struct {
-		phys_addr_t pa;
-		void *va;
-		bool avail;
-	} sec_cma_coherent[SEC_CMA_COHERENT_MAX];
-	int stb_ext_params;
-#endif /* BCM_SECURE_DMA */
-#if defined(BCM_BACKPLANE_TIMEOUT)
+#ifdef BCMDBG_CTRACE
+	spinlock_t ctrace_lock;
+	struct list_head ctrace_list;
+	int ctrace_num;
+#endif /* BCMDBG_CTRACE */
+#if defined(AXI_TIMEOUTS_NIC)
 	bpt_cb_fn bpt_cb;
 	void *sih;
-#endif	/* BCM_BACKPLANE_TIMEOUT */
+#endif	/* AXI_TIMEOUTS_NIC */
 #ifdef USE_DMA_LOCK
 	spinlock_t dma_lock;
 	bool dma_lock_bh;

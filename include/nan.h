@@ -2,7 +2,7 @@
  * Fundamental types and constants relating to WFA NAN
  * (Neighbor Awareness Networking)
  *
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -18,20 +18,18 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
  *
- *
- * <<Broadcom-WL-IPTag/Open:>>
- *
- * $Id: nan.h 818571 2019-05-08 04:36:41Z $
+ * <<Broadcom-WL-IPTag/Dual:>>
  */
 #ifndef _NAN_H_
 #define _NAN_H_
 
 #include <typedefs.h>
 #include <802.11.h>
+
+/* Do we want to include p2p.h for constants like P2P_WFDS_HASH_LEN and
+ * maybe P2P_WFDS_MAX_SVC_NAME_LEN etc.?
+ */
 
 /* This marks the start of a packed structure section. */
 #include <packed_section_start.h>
@@ -472,7 +470,7 @@ typedef BWL_PRE_PACKED_STRUCT struct wifi_nan_ranging_report_attr_s {
 	See definition in 9.4.2.22.18 in 802.11mc D5.0
 	*/
 	uint8 entry_count;
-	uint8 data[2]; /* includes pad */
+	uint8 data[]; /* Variable size range entry */
 	/*
 	dot11_ftm_range_entry_t entries[entry_count];
 	uint8 error_count;
@@ -644,6 +642,8 @@ typedef BWL_PRE_PACKED_STRUCT struct wifi_nan_channel_entry_s {
 #define NAN_AVAIL_ENTRY_CTRL_BITMAP_PRESENT_SHIFT 12
 #define NAN_AVAIL_ENTRY_CTRL_BITMAP_PRESENT(_flags) (((_flags) & \
 	NAN_AVAIL_ENTRY_CTRL_BITMAP_PRESENT_MASK) >> NAN_AVAIL_ENTRY_CTRL_BITMAP_PRESENT_SHIFT)
+#define NAN_AVAIL_ENTRY_CTRL_TIME_BITMAP_PRESENT    1
+#define NAN_AVAIL_ENTRY_CTRL_USAGE_PREFERENCE	    0x3
 
 #define NAN_TIME_BMAP_CTRL_BITDUR_MASK 0x07
 #define NAN_TIME_BMAP_CTRL_BITDUR(_flags) ((_flags) & NAN_TIME_BMAP_CTRL_BITDUR_MASK)
@@ -979,7 +979,8 @@ enum {
 	NAN_BAND_ID_2G			= 2,	/* 2.4 GHz */
 	NAN_BAND_ID_3G			= 3,	/* 3.6 GHz */
 	NAN_BAND_ID_5G			= 4,	/* 4.9 & 5 GHz */
-	NAN_BAND_ID_60G			= 5
+	NAN_BAND_ID_60G			= 5,	/* 60 GHz */
+	NAN_BAND_ID_6G			= 6	/* 6 GHz (proprietary) */
 };
 typedef uint8 nan_band_id_t;
 
@@ -1083,6 +1084,9 @@ typedef BWL_PRE_PACKED_STRUCT struct nan2_pub_act_frame_s {
 #define NAN_MGMT_FRM_SUBTYPE_SCHED_CONF		12
 /* Schedule Update */
 #define NAN_MGMT_FRM_SUBTYPE_SCHED_UPD		13
+
+/* Vendor specific NAN OOB AF subtype */
+#define NAN_MGMT_FRM_SUBTYPE_NAN_OOB_AF		0xDD
 
 #define NAN_SCHEDULE_AF(_naf_subtype) \
 	((_naf_subtype >= NAN_MGMT_FRM_SUBTYPE_SCHED_REQ) && \

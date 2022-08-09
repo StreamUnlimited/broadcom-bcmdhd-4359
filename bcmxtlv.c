@@ -1,7 +1,7 @@
 /*
  * Driver O/S-independent utility routines
  *
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -17,22 +17,16 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
  *
- *
- * <<Broadcom-WL-IPTag/Open:>>
- *
- * $Id: bcmxtlv.c 788740 2018-11-13 21:45:01Z $
+ * <<Broadcom-WL-IPTag/Dual:>>
  */
-
-#include <bcm_cfg.h>
 
 #include <typedefs.h>
 #include <bcmdefs.h>
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 16, 0))
 #include <stdarg.h>
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(5, 16, 0) */
 
 #ifdef BCMDRIVER
 #include <osl.h>
@@ -42,7 +36,7 @@
 #include <stdlib.h>
 #ifndef ASSERT
 #define ASSERT(exp)
-#endif // endif
+#endif
 #endif /* !BCMDRIVER */
 
 #include <bcmtlv.h>
@@ -50,7 +44,7 @@
 #include <bcmutils.h>
 
 int
-bcm_xtlv_hdr_size(bcm_xtlv_opts_t opts)
+BCMPOSTTRAPFN(bcm_xtlv_hdr_size)(bcm_xtlv_opts_t opts)
 {
 	int len = (int)OFFSETOF(bcm_xtlv_t, data); /* nominal */
 	if (opts & BCM_XTLV_OPTION_LENU8) --len;
@@ -63,12 +57,12 @@ bool
 bcm_valid_xtlv(const bcm_xtlv_t *elt, int buf_len, bcm_xtlv_opts_t opts)
 {
 	return elt != NULL &&
-		buf_len >= bcm_xtlv_hdr_size(opts) &&
+	        buf_len >= bcm_xtlv_hdr_size(opts) &&
 		buf_len  >= bcm_xtlv_size(elt, opts);
 }
 
 int
-bcm_xtlv_size_for_data(int dlen, bcm_xtlv_opts_t opts)
+BCMPOSTTRAPFN(bcm_xtlv_size_for_data)(int dlen, bcm_xtlv_opts_t opts)
 {
 	int hsz;
 
@@ -94,7 +88,7 @@ bcm_xtlv_len(const bcm_xtlv_t *elt, bcm_xtlv_opts_t opts)
 	const uint8 *lenp;
 	int len;
 
-	lenp = (const uint8 *)&elt->len; /* nominal */
+	lenp = (const uint8 *)elt + OFFSETOF(bcm_xtlv_t, len); /* nominal */
 	if (opts & BCM_XTLV_OPTION_IDU8) {
 		--lenp;
 	}
@@ -128,19 +122,42 @@ bcm_xtlv_id(const bcm_xtlv_t *elt, bcm_xtlv_opts_t opts)
 bcm_xtlv_t *
 bcm_next_xtlv(const bcm_xtlv_t *elt, int *buflen, bcm_xtlv_opts_t opts)
 {
-	int sz;
+	uint sz;
+
+	COV_TAINTED_DATA_SINK(buflen);
+	COV_NEG_SINK(buflen);
+
+	/* validate current elt */
+	if (!bcm_valid_xtlv(elt, *buflen, opts))
+		return NULL;
+
 	/* advance to next elt */
 	sz = BCM_XTLV_SIZE_EX(elt, opts);
 	elt = (const bcm_xtlv_t*)((const uint8 *)elt + sz);
+
+#if defined(__COVERITY__)
+	/* The 'sz' value is tainted in Coverity because it is read from the tainted data pointed
+	 * to by 'elt'.  However, bcm_valid_xtlv() verifies that the elt pointer is a valid element,
+	 * so its size, sz = BCM_XTLV_SIZE_EX(elt, opts), is in the bounds of the buffer.
+	 * Clearing the tainted attribute of 'sz' for Coverity.
+	 */
+	__coverity_tainted_data_sanitize__(sz);
+	if (sz > *buflen) {
+		return NULL;
+	}
+#endif /* __COVERITY__ */
+
 	*buflen -= sz;
 
 	/* validate next elt */
 	if (!bcm_valid_xtlv(elt, *buflen, opts))
 		return NULL;
 
-	GCC_DIAGNOSTIC_PUSH_SUPPRESS_CAST();
+	COV_TAINTED_DATA_ARG(elt);
+
+	GCC_DIAGNOSTIC_PUSH_SUPPRESS_CAST()
 	return (bcm_xtlv_t *)(elt);
-	GCC_DIAGNOSTIC_POP();
+	GCC_DIAGNOSTIC_POP()
 }
 
 int
@@ -194,7 +211,7 @@ bcm_xtlv_head(bcm_xtlvbuf_t *tbuf)
 }
 
 void
-bcm_xtlv_pack_xtlv(bcm_xtlv_t *xtlv, uint16 type, uint16 len, const uint8 *data,
+BCMPOSTTRAPFN(bcm_xtlv_pack_xtlv)(bcm_xtlv_t *xtlv, uint16 type, uint16 len, const uint8 *data,
 	bcm_xtlv_opts_t opts)
 {
 	uint8 *data_buf;
@@ -225,9 +242,7 @@ bcm_xtlv_pack_xtlv(bcm_xtlv_t *xtlv, uint16 type, uint16 len, const uint8 *data,
 		*lenp = (uint8)len;
 		data_buf = lenp + sizeof(uint8);
 	} else {
-		bool Unexpected_xtlv_option = TRUE;
-		BCM_REFERENCE(Unexpected_xtlv_option);
-		ASSERT(!Unexpected_xtlv_option);
+		ASSERT(!"Unexpected xtlv option");
 		return;
 	}
 
@@ -236,8 +251,9 @@ bcm_xtlv_pack_xtlv(bcm_xtlv_t *xtlv, uint16 type, uint16 len, const uint8 *data,
 		len &= 0xff;
 	}
 
-	if (data != NULL)
+	if (data != NULL) {
 		memcpy(data_buf, data, len);
+	}
 }
 
 /* xtlv header is always packed in LE order */
@@ -391,8 +407,9 @@ bcm_pack_xtlv_entry(uint8 **tlv_buf, uint16 *buflen, uint16 type, uint16 len,
 	size = bcm_xtlv_size_for_data(len, opts);
 
 	/* copy data from tlv buffer to dst provided by user */
-	if (size > *buflen)
+	if (size > *buflen) {
 		return BCME_BADLEN;
+	}
 
 	bcm_xtlv_pack_xtlv(ptlv, type, len, src_data, opts);
 
@@ -431,11 +448,15 @@ bcm_unpack_xtlv_buf(void *ctx, const uint8 *tlv_buf, uint16 buflen, bcm_xtlv_opt
 		size = bcm_xtlv_size_for_data(len, opts);
 
 		sbuflen -= size;
-		if (sbuflen < 0) /* check for buffer overrun */
-			break;
 
-		if ((res = cbfn(ctx, data, type, len)) != BCME_OK)
+		/* check for buffer overrun */
+		if (sbuflen < 0) {
 			break;
+		}
+
+		if ((res = cbfn(ctx, data, type, len)) != BCME_OK) {
+			break;
+		}
 		tlv_buf += size;
 	}
 	return res;
@@ -516,13 +537,14 @@ bcm_pack_xtlv_buf_from_mem(uint8 **tlv_buf, uint16 *buflen, const xtlv_desc_t *i
  *
  */
 int
-bcm_unpack_xtlv_buf_to_mem(uint8 *tlv_buf, int *buflen, xtlv_desc_t *items,
+bcm_unpack_xtlv_buf_to_mem(const uint8 *tlv_buf, int *buflen, xtlv_desc_t *items,
 	bcm_xtlv_opts_t opts)
 {
 	int res = BCME_OK;
-	bcm_xtlv_t *elt;
+	const bcm_xtlv_t *elt;
 
-	elt =  bcm_valid_xtlv((bcm_xtlv_t *)tlv_buf, *buflen, opts) ? (bcm_xtlv_t *)tlv_buf : NULL;
+	elt =  bcm_valid_xtlv((const bcm_xtlv_t *)tlv_buf, *buflen, opts) ?
+		(const bcm_xtlv_t *)tlv_buf : NULL;
 	if (!elt || !items) {
 		res = BCME_BADARG;
 		return res;
@@ -548,7 +570,7 @@ bcm_unpack_xtlv_buf_to_mem(uint8 *tlv_buf, int *buflen, xtlv_desc_t *items,
 		}
 	}
 
-	if (res == BCME_OK && *buflen != 0)
+	if (res == BCME_OK && *buflen != 0)		/* this does not look right */
 		res =  BCME_BUFTOOSHORT;
 
 	return res;
@@ -570,6 +592,9 @@ bcm_get_data_from_xtlv_buf(const uint8 *tlv_buf, uint16 buflen, uint16 id,
 	int sbuflen = buflen;
 	const uint8 *data;
 	int hdr_size;
+
+	COV_TAINTED_DATA_SINK(buflen);
+	COV_NEG_SINK(buflen);
 
 	hdr_size = BCM_XTLV_HDR_SIZE_EX(opts);
 
@@ -595,6 +620,8 @@ bcm_get_data_from_xtlv_buf(const uint8 *tlv_buf, uint16 buflen, uint16 id,
 
 		tlv_buf += size;
 	}
+
+	COV_TAINTED_DATA_ARG(retptr);
 
 	return retptr;
 }

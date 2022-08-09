@@ -1,7 +1,7 @@
 /*
  * Custom OID/ioctl related helper functions.
  *
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -17,12 +17,8 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
- * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: wlioctl_utils.h 626207 2016-03-19 17:39:14Z $
+ * <<Broadcom-WL-IPTag/Dual:>>
  */
 
 #ifndef _wlioctl_utils_h_
@@ -52,10 +48,13 @@ extern const char * wl_get_reinit_rc_name(int rc);
 		((const wl_cnt_info_t *)cntbuf)->datalen, WL_CNT_XTLV_WLC,		\
 		NULL, BCM_XTLV_OPTION_ALIGN32)
 
+/* We keep adding new counters, so give warning in case we exceed the ioctl buf len
+ * and need to move on to larger ioctl length in the future.
+ */
 #define CHK_CNTBUF_DATALEN(cntbuf, ioctl_buflen) do {					\
 	if (((wl_cnt_info_t *)cntbuf)->datalen +			\
 		OFFSETOF(wl_cnt_info_t, data) > ioctl_buflen)	\
-		printf("%s: IOVAR buffer short!\n", __FUNCTION__);	\
+		printf("IOVAR buffer short!\n");	\
 } while (0)
 
 #endif /* _wlioctl_utils_h_ */

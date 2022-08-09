@@ -1,7 +1,7 @@
 /*
  * Fundamental types and constants relating to 802.11s Mesh
  *
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -17,14 +17,8 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
  *
- *
- * <<Broadcom-WL-IPTag/Open:>>
- *
- * $Id: 802.11s.h 700076 2017-05-17 14:42:22Z $
+ * <<Broadcom-WL-IPTag/Dual:>>
  */
 
 #ifndef _802_11s_h_
@@ -33,8 +27,13 @@
 /* This marks the start of a packed structure section. */
 #include <packed_section_start.h>
 
-#define DOT11_MESH_FLAGS_AE_MASK	0x3
-#define DOT11_MESH_FLAGS_AE_SHIFT	0
+#define DOT11_MESH_FLAGS_AE_MASK	0x3u
+#define DOT11_MESH_FLAGS_AE_SHIFT	0u
+
+/* Mesh Control Flags: Address Exetension mode values */
+#define DOT11_MESH_AE_NONE              0u
+#define DOT11_MESH_AE_A4                1u
+#define DOT11_MESH_AE_A5_A6             2u
 
 #define DOT11_MESH_CONNECTED_AS_SET         7
 #define DOT11_MESH_NUMBER_PEERING_SET       1
@@ -83,6 +82,10 @@ BWL_PRE_PACKED_STRUCT struct dot11_meshctrl_hdr {
 	struct ether_addr   a5;         /* optional address 5 */
 	struct ether_addr   a6;         /* optional address 6 */
 } BWL_POST_PACKED_STRUCT;
+
+#define DOT11_MESH_CONTROL_MIN_LEN      6u
+#define DOT11_MESH_CONTROL_A4_LEN      12u
+#define DOT11_MESH_CONTROL_A5A6_LEN    18u
 
 /* Mesh Path Selection Action Frame */
 BWL_PRE_PACKED_STRUCT struct dot11_mesh_pathsel {

@@ -4,7 +4,7 @@
  * To be used in firmware and host apps or dhd - reducing code size,
  * duplication, and maintenance overhead.
  *
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -20,14 +20,8 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
  *
- *
- * <<Broadcom-WL-IPTag/Open:>>
- *
- * $Id$
+ * <<Broadcom-WL-IPTag/Dual:>>
  */
 
 #ifndef _bcmiov_h_
@@ -103,7 +97,7 @@ typedef int (*bcm_iov_cmd_set_t)(const bcm_iov_cmd_digest_t *dig,
 #define BCM_IOV_STATUS_LEN sizeof(uint32)
 
 /* batch version is indicated by setting high bit. */
-#define BCM_IOV_BATCH_MASK 0x8000
+#define BCM_IOV_BATCH_MASK	0x8000
 
 /*
  * Batched commands will have the following memory layout
@@ -256,16 +250,19 @@ struct bcm_iov_cmd_tlv_info {
 /*
  * module private parse context. Default version type len is uint16
  */
-enum {
-	BCM_IOV_PARSE_CMD_NONE = 0
-};
-typedef uint32 parse_context_opts_t;
+
+/* Command parsing options with respect to validation */
+/* Possible values for parse context options */
+/* Bit 0 - Validate only */
+#define BCM_IOV_PARSE_OPT_BATCH_VALIDATE 0x00000001
+
+typedef uint32 bcm_iov_parse_opts_t;
 
 /* get digest callback */
 typedef int (*bcm_iov_get_digest_t)(void *cmd_ctx, bcm_iov_cmd_digest_t **dig);
 
 typedef struct bcm_iov_parse_config {
-	parse_context_opts_t options; /* to handle different ver lengths */
+	bcm_iov_parse_opts_t options; /* to handle different ver lengths */
 	bcm_iov_malloc_t alloc_fn;
 	bcm_iov_free_t free_fn;
 	bcm_iov_get_digest_t dig_fn;

@@ -1,7 +1,7 @@
 /*
  * BCMSDH Function Driver for the native SDIO/MMC driver in the Linux Kernel
  *
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -17,14 +17,8 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
  *
- *
- * <<Broadcom-WL-IPTag/Proprietary,Open:>>
- *
- * $Id: bcmsdh_sdmmc.h 753315 2018-03-21 04:10:12Z $
+ * <<Broadcom-WL-IPTag/Dual:>>
  */
 
 #ifndef __BCMSDH_SDMMC_H__
@@ -43,7 +37,11 @@
 #define sd_ack_intr(sd)
 #define sd_wakeup(sd);
 
+#ifdef BCMPERFSTATS
+#define sd_log(x)	do { if (sd_msglevel & SDH_LOG_VAL)	 bcmlog x; } while (0)
+#else
 #define sd_log(x)
+#endif
 
 #define SDIOH_ASSERT(exp) \
 	do { if (!(exp)) \
@@ -87,7 +85,12 @@ struct sdioh_info {
 	struct sdio_func	*func[SDIOD_MAX_IOFUNCS];
 	uint		sd_clk_rate;
 	uint	txglom_mode;		/* Txglom mode: 0 - copy, 1 - multi-descriptor */
+#ifdef PKT_STATICS
 	uint32	sdio_spent_time_us;
+#endif
+#if !defined(OOB_INTR_ONLY)
+	struct mutex claim_host_mutex; // terence 20140926: fix for claim host issue
+#endif
 };
 
 /************************************************************

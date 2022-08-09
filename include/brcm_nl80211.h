@@ -1,7 +1,7 @@
 /*
  * Definitions for nl80211 vendor command/event access to host driver
  *
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -17,31 +17,29 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
  *
- *
- * <<Broadcom-WL-IPTag/Open:>>
- *
- * $Id: brcm_nl80211.h 787269 2018-11-01 11:46:31Z $
+ * <<Broadcom-WL-IPTag/Dual:>>
  *
  */
 
 #ifndef _brcm_nl80211_h_
 #define _brcm_nl80211_h_
 
+//#ifdef OEM_ANDROID Need proper #ifdef in the referencing code as well
 #define OUI_BRCM  0x001018
 #define OUI_GOOGLE  0x001A11
 
 enum wl_vendor_subcmd {
-	BRCM_VENDOR_SCMD_UNSPEC		= 0,
-	BRCM_VENDOR_SCMD_PRIV_STR	= 1,
-	BRCM_VENDOR_SCMD_BCM_STR	= 2,
-	BRCM_VENDOR_SCMD_BCM_PSK	= 3,
-	BRCM_VENDOR_SCMD_SET_PMK	= 4,
-	BRCM_VENDOR_SCMD_GET_FEATURES	= 5,
-	BRCM_VENDOR_SCMD_MAX		= 6
+	BRCM_VENDOR_SCMD_UNSPEC			= 0,
+	BRCM_VENDOR_SCMD_PRIV_STR		= 1,
+	BRCM_VENDOR_SCMD_BCM_STR		= 2,
+	BRCM_VENDOR_SCMD_BCM_PSK		= 3,
+	BRCM_VENDOR_SCMD_SET_PMK		= 4,
+	BRCM_VENDOR_SCMD_GET_FEATURES		= 5,
+	BRCM_VENDOR_SCMD_SET_MAC		= 6,
+	BRCM_VENDOR_SCMD_SET_CONNECT_PARAMS	= 7,
+	BRCM_VENDOR_SCMD_SET_START_AP_PARAMS	= 8,
+	BRCM_VENDOR_SCMD_MAX			= 9
 };
 
 struct bcm_nlmsg_hdr {
@@ -68,5 +66,12 @@ struct nl_prv_data {
 	uint len;			/* ioctl return buffer length */
 	struct bcm_nlmsg_hdr *nlioc;	/* bcm_nlmsg_hdr header pointer */
 };
+//#endif /* OEM_ANDROID */
+
+/* Keep common BCM netlink macros here */
+#define BCM_NL_USER	31
+#define BCM_NL_OXYGEN	30
+#define BCM_NL_TS	29
+/* ====== !! ADD NEW NL socket related defines here !! ====== */
 
 #endif /* _brcm_nl80211_h_ */

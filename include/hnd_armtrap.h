@@ -1,7 +1,7 @@
 /*
  * HND arm trap handling.
  *
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -17,14 +17,8 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
  *
- *
- * <<Broadcom-WL-IPTag/Open:>>
- *
- * $Id: hnd_armtrap.h 545867 2015-04-01 22:45:19Z $
+ * <<Broadcom-WL-IPTag/Dual:>>
  */
 
 #ifndef	_hnd_armtrap_h_
@@ -53,6 +47,9 @@
 #define	TR_SP		TR_REG(13)
 #define	TR_LR		TR_REG(14)
 #define	TR_PC		TR_REG(15)
+
+/* Number of core ARM registers. */
+#define	TR_REGS_NUM	16u
 
 #define	TRAP_T_SIZE	80
 #define ASSERT_TRAP_SVC_NUMBER	255

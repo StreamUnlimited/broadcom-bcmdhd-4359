@@ -1,7 +1,7 @@
 /*
  * SD-SPI Protocol Conversion - BCMSDH->gSPI Translation Layer
  *
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -17,14 +17,8 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
  *
- *
- * <<Broadcom-WL-IPTag/Open:>>
- *
- * $Id: bcmspibrcm.h 514727 2014-11-12 03:02:48Z $
+ * <<Broadcom-WL-IPTag/Dual:>>
  */
 #ifndef	_BCM_SPI_BRCM_H
 #define	_BCM_SPI_BRCM_H
@@ -32,10 +26,10 @@
 #ifndef SPI_MAX_IOFUNCS
 /* Maximum number of I/O funcs */
 #define SPI_MAX_IOFUNCS		4
-#endif // endif
+#endif
 /* global msglevel for debug messages - bitvals come from sdiovar.h */
 
-#if defined(DHD_DEBUG)
+#if defined(BCMDBG) || defined(DHD_DEBUG)
 #define sd_err(x)	do { if (sd_msglevel & SDH_ERROR_VAL) printf x; } while (0)
 #define sd_trace(x)	do { if (sd_msglevel & SDH_TRACE_VAL) printf x; } while (0)
 #define sd_info(x)	do { if (sd_msglevel & SDH_INFO_VAL)  printf x; } while (0)
@@ -49,9 +43,13 @@
 #define sd_debug(x)
 #define sd_data(x)
 #define sd_ctrl(x)
-#endif // endif
+#endif
 
+#ifdef BCMPERFSTATS
+#define sd_log(x)	do { if (sd_msglevel & SDH_LOG_VAL)	 bcmlog x; } while (0)
+#else
 #define sd_log(x)
+#endif
 
 #define SDIOH_ASSERT(exp) \
 	do { if (!(exp)) \

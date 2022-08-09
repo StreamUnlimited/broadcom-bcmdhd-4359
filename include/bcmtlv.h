@@ -1,7 +1,7 @@
 /*
  * TLV and XTLV support
  *
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -17,13 +17,8 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
  *
- * <<Broadcom-WL-IPTag/Open:>>
- *
- * $Id: $
+ * <<Broadcom-WL-IPTag/Dual:>>
  */
 
 #ifndef	_bcmtlv_h_
@@ -45,7 +40,7 @@ typedef struct bcm_tlv {
 } bcm_tlv_t;
 
 /* size of tlv including data */
-#define BCM_TLV_SIZE(_tlv) ((_tlv) ? (OFFSETOF(bcm_tlv_t, data) + (_tlv)->len) : 0)
+#define BCM_TLV_SIZE(_tlv) ((_tlv) ? (OFFSETOF(bcm_tlv_t, data) + (_tlv)->len) : 0u)
 
 /* get next tlv - no length checks */
 #define BCM_TLV_NEXT(_tlv) (bcm_tlv_t *)((uint8 *)(_tlv)+ BCM_TLV_SIZE(_tlv))
@@ -57,9 +52,10 @@ typedef struct bcm_tlv {
 #define BCM_TLV_HDR_SIZE (OFFSETOF(bcm_tlv_t, data))
 
 /* Check that bcm_tlv_t fits into the given buffer len */
-#define bcm_valid_tlv(elt, buflen) (\
-	 ((int)(buflen) >= (int)BCM_TLV_HDR_SIZE) && \
-	 ((int)(buflen) >= (int)(BCM_TLV_HDR_SIZE + (elt)->len)))
+#define bcm_valid_tlv(elt, buflen)					\
+	((elt != NULL) &&						\
+	 ((buflen) >= (uint)BCM_TLV_HDR_SIZE) &&			\
+	 ((buflen) >= (uint)(BCM_TLV_HDR_SIZE + (elt)->len)))
 
 /* type(aka id)/length/ext/value buffer */
 typedef struct bcm_tlv_ext {
@@ -74,7 +70,7 @@ typedef struct bcm_tlv_ext {
 	(bcm_tlv_ext_t *)((uint8 *)(_tlv_ext)+ BCM_TLV_EXT_SIZE(_tlv_ext))
 
 /* tlv_ext length is restricted to 1 byte */
-#define BCM_TLV_EXT_MAX_DATA_SIZE (254)
+#define BCM_TLV_EXT_MAX_DATA_SIZE (254u)
 
 /* tlv_ext header - three bytes */
 #define BCM_TLV_EXT_HDR_SIZE (OFFSETOF(bcm_tlv_ext_t, data))
@@ -94,37 +90,67 @@ void bcm_tlv_buffer_advance_past(const bcm_tlv_t *elt, const uint8 **buffer, uin
 /* find the tlv for a given id */
 bcm_tlv_t *bcm_parse_tlvs(const  void *buf, uint buflen, uint key);
 
+/* advancement modes for bcm_parse_tlvs_advance() */
+typedef enum {
+	BCM_TLV_ADVANCE_NONE = 0,  // do not adjust the buffer/buflen
+	BCM_TLV_ADVANCE_TO = 1,    // advance to the found tlv
+	BCM_TLV_ADVANCE_PAST = 2   // advance past the found tlv
+} bcm_tlv_advance_mode_t;
+
+/* Find an IE of a specific type from a buffer.
+ * tlvs: buffer to search for IE
+ * tlvs_len: buffer length
+ * tag: IE tag
+ * oui_len: length of the OUI
+ * oui: Specific OUI to match
+ * type: OUI type
+ * Return the matched IE, else return null.
+*/
+extern bcm_tlv_t *bcm_find_ie(const uint8 *tlvs, uint tlvs_len, uint8 tag,
+	uint8 oui_len, const char *oui, uint8 type);
+
+/* search for a matching tlv id, and adjust the parse buffer pointer/length */
+const bcm_tlv_t *bcm_parse_tlvs_advance(const uint8 **buf, uint *buflen, uint key,
+	bcm_tlv_advance_mode_t advance);
+
 /*
  * Traverse tlvs and return pointer to the first tlv that
  * matches the key. Return NULL if not found or tlv len < min_bodylen
  */
-bcm_tlv_t *bcm_parse_tlvs_min_bodylen(const  void *buf, int buflen, uint key, int min_bodylen);
+bcm_tlv_t *bcm_parse_tlvs_min_bodylen(const  void *buf, uint buflen, uint key, uint min_bodylen);
+
+/*
+ * Traverse tlvs and return pointer to the first tlv that
+ * matches the key. Return NULL if not found or tlv size > max_len or < min_len
+ */
+bcm_tlv_t *bcm_parse_tlvs_minmax_len(const  void *buf, uint buflen, uint key,
+	uint min_len, uint max_len);
 
 /* parse tlvs for dot11 - same as parse_tlvs but supports 802.11 id extension */
-bcm_tlv_t *bcm_parse_tlvs_dot11(const  void *buf, int buflen, uint key, bool id_ext);
+bcm_tlv_t *bcm_parse_tlvs_dot11(const  void *buf, uint buflen, uint key, bool id_ext);
 
 /* same as parse_tlvs, but stops when found id > key */
-const  bcm_tlv_t *bcm_parse_ordered_tlvs(const  void *buf, int buflen, uint key);
+const  bcm_tlv_t *bcm_parse_ordered_tlvs(const  void *buf, uint buflen, uint key);
 
 /* find a tlv with DOT11_MNG_PROPR_ID as id, and the given oui and type */
 	bcm_tlv_t *bcm_find_vendor_ie(const  void *tlvs, uint tlvs_len, const char *voui,
 	                              uint8 *type, uint type_len);
 
 /* write tlv at dst and return next tlv ptr */
-uint8 *bcm_write_tlv(int type, const void *data, int datalen, uint8 *dst);
+uint8 *bcm_write_tlv(int type, const void *data, uint datalen, uint8 *dst);
 
 /* write tlv_ext at dst and return next tlv ptr */
 uint8 *bcm_write_tlv_ext(uint8 type, uint8 ext, const void *data, uint8 datalen, uint8 *dst);
 
 /* write tlv at dst if space permits and return next tlv ptr */
-uint8 *bcm_write_tlv_safe(int type, const void *data, int datalen, uint8 *dst,
-	int dst_maxlen);
+uint8 *bcm_write_tlv_safe(int type, const void *data, uint datalen, uint8 *dst,
+	uint dst_maxlen);
 
 /* copy a tlv  and return next tlv ptr */
 uint8 *bcm_copy_tlv(const void *src, uint8 *dst);
 
 /* copy a tlv if space permits and return next tlv ptr */
-uint8 *bcm_copy_tlv_safe(const void *src, uint8 *dst, int dst_maxlen);
+uint8 *bcm_copy_tlv_safe(const void *src, uint8 *dst, uint dst_maxlen);
 
 /* end tlvs */
 
@@ -141,12 +167,12 @@ typedef struct bcm_xtlv {
 } bcm_xtlv_t;
 
 /* xtlv options */
-#define BCM_XTLV_OPTION_NONE	0x0000
-#define BCM_XTLV_OPTION_ALIGN32	0x0001 /* 32bit alignment of type.len.data */
-#define BCM_XTLV_OPTION_IDU8	0x0002 /* shorter id */
-#define BCM_XTLV_OPTION_LENU8	0x0004 /* shorted length */
-#define BCM_XTLV_OPTION_IDBE	0x0008 /* big endian format id */
-#define BCM_XTLV_OPTION_LENBE	0x0010 /* big endian format length */
+#define BCM_XTLV_OPTION_NONE	0x0000u
+#define BCM_XTLV_OPTION_ALIGN32	0x0001u /* 32bit alignment of type.len.data */
+#define BCM_XTLV_OPTION_IDU8	0x0002u /* shorter id */
+#define BCM_XTLV_OPTION_LENU8	0x0004u /* shorted length */
+#define BCM_XTLV_OPTION_IDBE	0x0008u /* big endian format id */
+#define BCM_XTLV_OPTION_LENBE	0x0010u /* big endian format length */
 typedef uint16 bcm_xtlv_opts_t;
 
 /* header size. depends on options. Macros names ending w/ _EX are where
@@ -155,7 +181,7 @@ typedef uint16 bcm_xtlv_opts_t;
  */
 
 /* xtlv header size depends on options */
-#define BCM_XTLV_HDR_SIZE 4
+#define BCM_XTLV_HDR_SIZE 4u
 #define BCM_XTLV_HDR_SIZE_EX(_opts) bcm_xtlv_hdr_size(_opts)
 
 /* note: xtlv len only stores the value's length without padding */
@@ -170,9 +196,9 @@ typedef uint16 bcm_xtlv_opts_t;
 #define BCM_XTLV_SIZE_EX(_elt, _opts) bcm_xtlv_size(_elt, _opts)
 
 /* max xtlv data size */
-#define BCM_XTLV_MAX_DATA_SIZE 65535
+#define BCM_XTLV_MAX_DATA_SIZE 65535u
 #define BCM_XTLV_MAX_DATA_SIZE_EX(_opts) ((_opts & BCM_XTLV_OPTION_LENU8) ? \
-	255 : 65535)
+	255u : 65535u)
 
 /* descriptor of xtlv data, packing(src) and unpacking(dst) support  */
 typedef struct {
@@ -275,7 +301,7 @@ int bcm_unpack_xtlv_buf(void *ctx, const uint8 *buf, uint16 buflen,
 	bcm_xtlv_opts_t opts, bcm_xtlv_unpack_cbfn_t *cbfn);
 
 /* unpack a set of tlvs from the buffer using provided xtlv descriptors */
-int bcm_unpack_xtlv_buf_to_mem(uint8 *buf, int *buflen, xtlv_desc_t *items,
+int bcm_unpack_xtlv_buf_to_mem(const uint8 *buf, int *buflen, xtlv_desc_t *items,
 	bcm_xtlv_opts_t opts);
 
 /* pack a set of tlvs into buffer using provided xtlv descriptors */
@@ -331,10 +357,17 @@ struct bcm_const_xlvp {
 	uint16 len;
 	const uint8 *data;
 };
+
 typedef struct bcm_const_xlvp bcm_const_xlvp_t;
 
-/* end length value pairs */
+struct bcm_const_ulvp {
+	uint32 len;
+	const uint8 *data;
+};
 
+typedef struct bcm_const_ulvp bcm_const_ulvp_t;
+
+/* end length value pairs */
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */

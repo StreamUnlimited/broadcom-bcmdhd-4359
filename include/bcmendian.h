@@ -1,7 +1,7 @@
 /*
  * Byte order utilities
  *
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -17,14 +17,8 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
  *
- *
- * <<Broadcom-WL-IPTag/Open:>>
- *
- *  $Id: bcmendian.h 788572 2018-11-13 03:52:19Z $
+ * <<Broadcom-WL-IPTag/Dual:>>
  *
  * This file by default provides proper behavior on little-endian architectures.
  * On big-endian architectures, IL_BIGENDIAN should be defined.
@@ -73,6 +67,7 @@
  *    Host <=> Little-Endian for 16- and 32-bit values
  */
 #ifndef hton16
+#ifndef IL_BIGENDIAN
 #define HTON16(i) BCMSWAP16(i)
 #define	hton16(i) bcmswap16(i)
 #define	HTON32(i) BCMSWAP32(i)
@@ -91,27 +86,67 @@
 #define htol32(i) (i)
 #define HTOL64(i) (i)
 #define htol64(i) (i)
+#else /* IL_BIGENDIAN */
+#define HTON16(i) (i)
+#define	hton16(i) (i)
+#define	HTON32(i) (i)
+#define	hton32(i) (i)
+#define	NTOH16(i) (i)
+#define	ntoh16(i) (i)
+#define	NTOH32(i) (i)
+#define	ntoh32(i) (i)
+#define	LTOH16(i) BCMSWAP16(i)
+#define	ltoh16(i) bcmswap16(i)
+#define	LTOH32(i) BCMSWAP32(i)
+#define	ltoh32(i) bcmswap32(i)
+#define HTOL16(i) BCMSWAP16(i)
+#define htol16(i) bcmswap16(i)
+#define HTOL32(i) BCMSWAP32(i)
+#define htol32(i) bcmswap32(i)
+#define HTOL64(i) BCMSWAP64(i)
+#define htol64(i) bcmswap64(i)
+#endif /* IL_BIGENDIAN */
 #endif /* hton16 */
 
+#ifndef IL_BIGENDIAN
 #define ltoh16_buf(buf, i)
 #define htol16_buf(buf, i)
 #define ltoh32_buf(buf, i)
 #define htol32_buf(buf, i)
 #define ltoh64_buf(buf, i)
 #define htol64_buf(buf, i)
+#else
+#define ltoh16_buf(buf, i) bcmswap16_buf((uint16 *)(buf), (i))
+#define htol16_buf(buf, i) bcmswap16_buf((uint16 *)(buf), (i))
+#define ltoh32_buf(buf, i) bcmswap32_buf((uint16 *)(buf), (i))
+#define htol32_buf(buf, i) bcmswap32_buf((uint16 *)(buf), (i))
+#define ltoh64_buf(buf, i) bcmswap64_buf((uint16 *)(buf), (i))
+#define htol64_buf(buf, i) bcmswap64_buf((uint16 *)(buf), (i))
+#endif /* IL_BIGENDIAN */
 
 /* Unaligned loads and stores in host byte order */
+#ifndef IL_BIGENDIAN
 #define load32_ua(a)		ltoh32_ua(a)
 #define store32_ua(a, v)	htol32_ua_store(v, a)
 #define load16_ua(a)		ltoh16_ua(a)
 #define store16_ua(a, v)	htol16_ua_store(v, a)
 #define load64_ua(a)		ltoh64_ua(a)
 #define store64_ua(a, v)	htol64_ua_store(v, a)
+#else
+#define load32_ua(a)		ntoh32_ua(a)
+#define store32_ua(a, v)	hton32_ua_store(v, a)
+#define load16_ua(a)		ntoh16_ua(a)
+#define store16_ua(a, v)	hton16_ua_store(v, a)
+#define load64_ua(a)		ntoh64_ua(a)
+#define store64_ua(a, v)	hton64_ua_store(v, a)
+#endif /* IL_BIGENDIAN */
 
-#define _LTOH16_UA(cp)	(uint16)((cp)[0] | ((cp)[1] << 8))
-#define _LTOH32_UA(cp)	(uint32)((cp)[0] | ((cp)[1] << 8) | ((cp)[2] << 16) | ((cp)[3] << 24))
-#define _NTOH16_UA(cp)	(uint16)(((cp)[0] << 8) | (cp)[1])
-#define _NTOH32_UA(cp)	(uint32)(((cp)[0] << 24) | ((cp)[1] << 16) | ((cp)[2] << 8) | (cp)[3])
+#define _LTOH16_UA(cp)	((uint16)(cp)[0] | ((uint16)(cp)[1] << 8))
+#define _LTOH32_UA(cp)	((uint32)(cp)[0] | ((uint32)(cp)[1] << 8) | \
+	((uint32)(cp)[2] << 16) | ((uint32)(cp)[3] << 24))
+#define _NTOH16_UA(cp)	(((uint16)(cp)[0] << 8) | (uint16)(cp)[1])
+#define _NTOH32_UA(cp)	(((uint32)(cp)[0] << 24) | ((uint32)(cp)[1] << 16) | \
+	((uint32)(cp)[2] << 8) | (uint32)(cp)[3])
 
 #define _LTOH64_UA(cp)	((uint64)(cp)[0] | ((uint64)(cp)[1] << 8) | \
 	((uint64)(cp)[2] << 16) | ((uint64)(cp)[3] << 24) | \
@@ -125,14 +160,14 @@
 
 #define ltoh_ua(ptr) \
 	(sizeof(*(ptr)) == sizeof(uint8) ? *(const uint8 *)(ptr) : \
-	 sizeof(*(ptr)) == sizeof(uint16) ? _LTOH16_UA((const uint8 *)(ptr)) : \
-	 sizeof(*(ptr)) == sizeof(uint32) ? _LTOH32_UA((const uint8 *)(ptr)) : \
+	 sizeof(*(ptr)) == sizeof(uint16) ? (uint16)_LTOH16_UA((const uint8 *)(ptr)) : \
+	 sizeof(*(ptr)) == sizeof(uint32) ? (uint32)_LTOH32_UA((const uint8 *)(ptr)) : \
 	 *(uint8 *)0)
 
 #define ntoh_ua(ptr) \
 	(sizeof(*(ptr)) == sizeof(uint8) ? *(const uint8 *)(ptr) : \
-	 sizeof(*(ptr)) == sizeof(uint16) ? _NTOH16_UA((const uint8 *)(ptr)) : \
-	 sizeof(*(ptr)) == sizeof(uint32) ? _NTOH32_UA((const uint8 *)(ptr)) : \
+	 sizeof(*(ptr)) == sizeof(uint16) ? (uint16)_NTOH16_UA((const uint8 *)(ptr)) : \
+	 sizeof(*(ptr)) == sizeof(uint32) ? (uint32)_NTOH32_UA((const uint8 *)(ptr)) : \
 	 *(uint8 *)0)
 
 #ifdef __GNUC__
@@ -207,8 +242,8 @@
 #define htol64_ua_store(val, bytes) ({ \
 	uint64 _val = (val); \
 	uint8 *_bytes = (uint8 *)(bytes); \
-	int i; \
-	for (i = 0; i < (int)sizeof(_val); ++i) { \
+	int _ii; \
+	for (_ii = 0; _ii < (int)sizeof(_val); ++_ii) { \
 		*_bytes++ = _val & 0xff; \
 		_val >>= 8; \
 	} \

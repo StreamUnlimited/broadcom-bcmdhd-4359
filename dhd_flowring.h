@@ -6,7 +6,7 @@
  * Provides type definitions and function prototypes used to create, delete and manage flow rings at
  * high level.
  *
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -22,15 +22,13 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
- *
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd_flowring.h 786596 2018-10-26 22:54:51Z $
+ * $Id$
  */
+
+/** XXX Twiki: [PCIeFullDongleArchitecture] */
 
 /****************
  * Common types *
@@ -60,8 +58,51 @@
 #endif /* IDLE_TX_FLOW_MGMT */
 #define FLOW_RING_STATUS_STA_FREEING    7
 
+#if defined(DHD_HTPUT_TUNABLES)
+#define HTPUT_FLOW_RING_PRIO		PRIO_8021D_BE
+#define HTPUT_NUM_STA_FLOW_RINGS	1u
+#define HTPUT_NUM_CLIENT_FLOW_RINGS	3u
+#define HTPUT_TOTAL_FLOW_RINGS		(HTPUT_NUM_STA_FLOW_RINGS + HTPUT_NUM_CLIENT_FLOW_RINGS)
+#define DHD_IS_FLOWID_HTPUT(pub, flowid) \
+	((flowid >= (pub)->htput_flow_ring_start) && \
+	(flowid < ((pub)->htput_flow_ring_start + HTPUT_TOTAL_FLOW_RINGS)))
+#endif /* DHD_HTPUT_TUNABLES */
+
+#ifdef DHD_EFI
+/*
+ * Each lbuf is of size 2048 bytes. But the last 112 bytes is occupied for lbuf header.
+ * Since lbuf is crucial data structure we want to avoid operations very close to lbuf.
+ * so providing a pad of 136 bytes. so lbuf and pad together is 248 bytes.
+ *
+ * So the maximum usable lbuf size is 1800 bytes.
+ *
+ * These 1800 bytes is utilized for below purposes.
+ *
+ * 1. FW operating in mode2 requires 98 bytes for extra headers
+ * like SNAP, PLCP etc. Whereas FW operating in mode4 requires 70 bytes.
+ * So in EFI DHD we will consider 98 bytes which fits for chips operating in both mode2 and mode4.
+ *
+ * 2. For TPUT tests in EFI user can request a maximum payload of 1500 bytes.
+ * To add ethernet header and TPUT header etc we are reserving 100bytes. So 1600 bytes are utilized
+ * for headers and payload.
+ *
+ * so 1698(98 + 1600) bytes by are consumed by 1 and 2.
+ * So we still have 112 bytes which can be utilized
+ * if FW needs buffer for more headers in future.
+ *
+ * --Update-- 13Jul2018 (above comments preserved for history)
+ * 3.  In case of 11ax chips more headroom is required, FW requires a min. of 1920 bytes for Rx
+ * buffers, or it will trap. Therefore bumping up the size to 1920 bytes. Which leaves
+ * only 16 bytes pad between data and lbuf header ! Further size increase may not be possible !!
+ */
+#define DHD_FLOWRING_RX_BUFPOST_PKTSZ	1920
+#else
 #define DHD_FLOWRING_RX_BUFPOST_PKTSZ	2048
+#endif /* DHD_EFI */
+
 #define DHD_FLOWRING_RX_BUFPOST_PKTSZ_MAX 4096
+
+#define DHD_FLOWRING_TX_BIG_PKT_SIZE	(3700u)
 
 #define DHD_FLOW_PRIO_AC_MAP		0
 #define DHD_FLOW_PRIO_TID_MAP		1
@@ -81,19 +122,21 @@
 #define DHD_IF_ROLE_P2PGO(pub, idx)	(DHD_IF_ROLE(pub, idx) == WLC_E_IF_ROLE_P2P_GO)
 #define DHD_IF_ROLE_WDS(pub, idx)	(DHD_IF_ROLE(pub, idx) == WLC_E_IF_ROLE_WDS)
 #define DHD_IF_ROLE_IBSS(pub, idx)	(DHD_IF_ROLE(pub, idx) == WLC_E_IF_ROLE_IBSS)
-#ifdef WL_NAN
 #define DHD_IF_ROLE_NAN(pub, idx)	(DHD_IF_ROLE(pub, idx) == WLC_E_IF_ROLE_NAN)
-#else
-#define DHD_IF_ROLE_NAN(pub, idx)	(FALSE)
-#endif /* WL_NAN */
-#define DHD_IF_ROLE_AWDL(pub, idx)	(FALSE)
 
 #define DHD_IF_ROLE_GENERIC_STA(pub, idx) \
 	(DHD_IF_ROLE_STA(pub, idx) || DHD_IF_ROLE_P2PGC(pub, idx) || DHD_IF_ROLE_WDS(pub, idx))
 
+#ifdef DHD_AWDL
+#define DHD_IF_ROLE_AWDL(pub, idx)	(DHD_IF_ROLE(pub, idx) == WLC_E_IF_ROLE_AWDL)
 #define DHD_IF_ROLE_MULTI_CLIENT(pub, idx) \
 	(DHD_IF_ROLE_AP(pub, idx) || DHD_IF_ROLE_P2PGO(pub, idx) || DHD_IF_ROLE_AWDL(pub, idx) ||\
 		DHD_IF_ROLE_NAN(pub, idx))
+#else
+#define DHD_IF_ROLE_MULTI_CLIENT(pub, idx) \
+	(DHD_IF_ROLE_AP(pub, idx) || DHD_IF_ROLE_P2PGO(pub, idx) ||\
+		DHD_IF_ROLE_NAN(pub, idx))
+#endif /* DHD_AWDL */
 
 #define DHD_FLOW_RING(dhdp, flowid) \
 	(flow_ring_node_t *)&(((flow_ring_node_t *)((dhdp)->flow_ring_table))[flowid])
@@ -161,17 +204,17 @@ typedef struct flow_queue {
 #define DHD_FLOW_QUEUE_SET_L2CLEN(queue, grandparent_clen_ptr)  \
 	((queue)->l2clen_ptr) = (void *)(grandparent_clen_ptr)
 
+#if defined(BCMDBG)
+#define DHD_FLOWRING_TXSTATUS_CNT_UPDATE(bus, flowid, txstatus) \
+		dhd_bus_flow_ring_cnt_update(bus, flowid, txstatus)
+#else
 #define DHD_FLOWRING_TXSTATUS_CNT_UPDATE(bus, flowid, txstatus)
+#endif /* BCMDBG */
 
 /* Pkttag not compatible with PROP_TXSTATUS or WLFC */
 typedef struct dhd_pkttag_fr {
 	uint16  flowid;
 	uint16  ifid;
-#ifdef DHD_LB_TXC
-	int     dataoff;
-	dmaaddr_t physaddr;
-	uint32 pa_len;
-#endif /* DHD_LB_TXC */
 } dhd_pkttag_fr_t;
 
 #define DHD_PKTTAG_SET_IFID(tag, idx)       ((tag)->ifid = (uint16)(idx))
@@ -187,6 +230,9 @@ typedef struct flow_info {
 	uint8		ifindex;
 	uchar		sa[ETHER_ADDR_LEN];
 	uchar		da[ETHER_ADDR_LEN];
+#if defined(BCMDBG)
+	uint32		tx_status[DHD_MAX_TX_STATUS_MSGS];
+#endif
 #ifdef TX_STATUS_LATENCY_STATS
 	/* total number of tx_status received on this flowid */
 	uint64           num_tx_status;
@@ -215,6 +261,17 @@ typedef struct flow_ring_node {
 #ifdef IDLE_TX_FLOW_MGMT
 	uint64		last_active_ts; /* contains last active timestamp */
 #endif /* IDLE_TX_FLOW_MGMT */
+#ifdef DEVICE_TX_STUCK_DETECT
+	/* Time stamp(msec) when last time a Tx packet completion is received on this flow ring */
+	uint32		tx_cmpl;
+	/*
+	 * Holds the tx_cmpl which was read during the previous
+	 * iteration of the stuck detection algo
+	 */
+	uint32		tx_cmpl_prev;
+	/* counter to decide if this particlur flow is stuck or not */
+	uint32		stuck_count;
+#endif /* DEVICE_TX_STUCK_DETECT */
 #ifdef DHD_HP2P
 	bool	hp2p_ring;
 #endif /* DHD_HP2P */
@@ -250,13 +307,14 @@ extern void dhd_flow_queue_init(dhd_pub_t *dhdp, flow_queue_t *queue, int max);
 extern void dhd_flow_queue_reinit(dhd_pub_t *dhdp, flow_queue_t *queue, int max);
 extern void dhd_flow_queue_register(flow_queue_t *queue, flow_queue_cb_t cb);
 extern int  dhd_flow_queue_enqueue(dhd_pub_t *dhdp, flow_queue_t *queue, void *pkt);
+extern int  dhd_flow_queue_enqueue_head(dhd_pub_t *dhdp, flow_queue_t *queue, void *pkt);
 extern void * dhd_flow_queue_dequeue(dhd_pub_t *dhdp, flow_queue_t *queue);
 extern void dhd_flow_queue_reinsert(dhd_pub_t *dhdp, flow_queue_t *queue, void *pkt);
 
 extern void dhd_flow_ring_config_thresholds(dhd_pub_t *dhdp, uint16 flowid,
                           int queue_budget, int cumm_threshold, void *cumm_ctr,
                           int l2cumm_threshold, void *l2cumm_ctr);
-extern int  dhd_flow_rings_init(dhd_pub_t *dhdp, uint32 num_flow_rings);
+extern int  dhd_flow_rings_init(dhd_pub_t *dhdp, uint32 num_h2d_rings);
 
 extern void dhd_flow_rings_deinit(dhd_pub_t *dhdp);
 
@@ -283,6 +341,11 @@ extern int dhd_update_interface_link_status(dhd_pub_t *dhdp, uint8 ifindex,
                 uint8 status);
 extern int dhd_flow_prio_map(dhd_pub_t *dhd, uint8 *map, bool set);
 extern int dhd_update_flow_prio_map(dhd_pub_t *dhdp, uint8 map);
-
+extern uint32 dhd_active_tx_flowring_bkpq_len(dhd_pub_t *dhdp);
+#ifdef DHD_AWDL
+/* DHD handler for awdl peer op IOVAR */
+extern void dhd_awdl_peer_op(dhd_pub_t *dhdp, uint8 ifindex,
+                void *buf, uint32 buflen);
+#endif /* DHD_AWDL */
 extern uint8 dhd_flow_rings_ifindex2role(dhd_pub_t *dhdp, uint8 ifindex);
 #endif /* _dhd_flowrings_h_ */

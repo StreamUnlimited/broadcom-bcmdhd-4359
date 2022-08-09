@@ -3,7 +3,7 @@
  *
  * Provides type definitions and function prototypes used to parse ip packet.
  *
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -19,14 +19,10 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
- *
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd_ip.h 790572 2018-11-26 11:03:46Z $
+ * $Id$
  */
 
 #ifndef _dhd_ip_h_
@@ -65,8 +61,12 @@ extern tcp_hdr_flag_t dhd_tcpdata_get_flag(dhd_pub_t *dhdp, void *pkt);
 #define	TCPACKSZMAX	(TCPACKSZMIN + 100)
 
 /* Max number of TCP streams that have own src/dst IP addrs and TCP ports */
+#ifndef TCPACK_INFO_MAXNUM
 #define TCPACK_INFO_MAXNUM 4
+#endif
+#ifndef TCPDATA_INFO_MAXNUM
 #define TCPDATA_INFO_MAXNUM 4
+#endif
 #define TCPDATA_PSH_INFO_MAXNUM (8 * TCPDATA_INFO_MAXNUM)
 
 #define TCPDATA_INFO_TIMEOUT 5000	/* Remove tcpdata_info if inactive for this time (in ms) */

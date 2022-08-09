@@ -16,7 +16,7 @@
 #define CCODE_4359C0
 #endif
 #if defined(BCMPCIE)
-#define CCODE_4375B4
+//#define CCODE_4375B4
 #endif
 #ifdef BCMDBUS
 #define CCODE_4358U
@@ -98,7 +98,7 @@ const char ccode_4356a2[] = \
 "GB/6 GD/2 GF/2 GP/2 GR/4 GT/1 GU/12 "\
 "HK/2 HR/4 HU/4 "\
 "ID/13 IE/5 IL/7 IN/28 IS/4 IT/4 "\
-"JO/3 JP/58 "\
+"JO/3 JP/45 "\
 "KH/2 KR/57 KW/5 KY/3 "\
 "LA/2 LB/5 LI/4 LK/1 LS/2 LT/4 LU/3 LV/4 "\
 "MA/2 MC/1 MD/2 ME/2 MK/2 MN/1 MO/2 MR/2 MT/4 MQ/2 MU/2 MV/3 MW/1 MX/20 MY/16 "\
@@ -232,7 +232,7 @@ const ccode_list_map_t ccode_list_map[] = {
 	{BCM4354_CHIP_ID,	2,	ccode_4356a2,	"XZ/11"},
 	{BCM4356_CHIP_ID,	2,	ccode_4356a2,	"XZ/11"},
 	{BCM4359_CHIP_ID,	9,	ccode_4359c0,	"XZ/11"},
-	{BCM4375_CHIP_ID,	5,	ccode_4375b4,	"XZ/11"},
+	{BCM4375_CHIP_ID,	5,	ccode_4375b4,	""},
 #endif
 #ifdef BCMDBUS
 	{BCM43569_CHIP_ID,	2,	ccode_4358u, "XW/0"},
@@ -243,11 +243,11 @@ int
 dhd_ccode_map_country_list(dhd_pub_t *dhd, wl_country_t *cspec)
 {
 	int bcmerror = -1, i;
-	uint chip = dhd->conf->chip, chiprev = dhd->conf->chiprev; 
+	uint chip = dhd->conf->chip, chiprev = dhd->conf->chiprev;
 	const char *ccode_list = NULL, *ccode_ww = NULL;
 	char *pch;
 
-	for (i=0;  i<sizeof(ccode_list_map)/sizeof(ccode_list_map[0]);  i++) {
+	for (i=0; i<sizeof(ccode_list_map)/sizeof(ccode_list_map[0]); i++) {
 		const ccode_list_map_t* row = &ccode_list_map[i];
 		if (row->chip == chip && row->chiprev == chiprev) {
 			ccode_list = row->ccode_list;

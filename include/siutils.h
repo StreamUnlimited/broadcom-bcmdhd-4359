@@ -2,7 +2,7 @@
  * Misc utility routines for accessing the SOC Interconnects
  * of Broadcom HNBU chips.
  *
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -18,27 +18,97 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
  *
- *
- * <<Broadcom-WL-IPTag/Open:>>
- *
- * $Id: siutils.h 798061 2019-01-04 23:27:15Z $
+ * <<Broadcom-WL-IPTag/Dual:>>
  */
 
 #ifndef	_siutils_h_
 #define	_siutils_h_
 
-#ifdef SR_DEBUG
-#include "wlioctl.h"
-#endif /* SR_DEBUG */
+#include <osl_decl.h>
+
+/* Make the d11 core(s) selectable by the user config... */
+#ifndef D11_CORE_UNIT_MASK
+/* By default we allow all d11 cores to be used */
+#define D11_CORE_UNIT_MASK 0xFFFFFFFFu
+#endif
+
+/* Generic interrupt bit mask definitions */
+enum bcm_int_reg_idx {
+	BCM_INT_REG_IDX_0 = 0,
+	BCM_INT_REG_IDX_1 = 1,
+	/* temp work around to avoid > 50K invalidation on 4388a0-roml */
+#ifndef ROM_COMPAT_INT_REG_IDX
+	BCM_INT_REG_IDX_2 = 2,
+#endif /* ROM_COMPAT_INT_REG_IDX */
+	BCM_INT_REGS_NUM
+};
+
+typedef struct bcm_int_bitmask {
+	uint32 bits[BCM_INT_REGS_NUM];
+} bcm_int_bitmask_t;
+
+#ifndef ROM_COMPAT_INT_REG_IDX
+
+#define BCM_INT_BITMASK_IS_EQUAL(b, cmp) (\
+	(b)->bits[BCM_INT_REG_IDX_0] == (cmp)->bits[BCM_INT_REG_IDX_0] && \
+	(b)->bits[BCM_INT_REG_IDX_1] == (cmp)->bits[BCM_INT_REG_IDX_1] && \
+	(b)->bits[BCM_INT_REG_IDX_2] == (cmp)->bits[BCM_INT_REG_IDX_2])
+
+#define BCM_INT_BITMASK_IS_ZERO(b) (\
+	(b)->bits[BCM_INT_REG_IDX_0] == 0 && \
+	(b)->bits[BCM_INT_REG_IDX_1] == 0 && \
+	(b)->bits[BCM_INT_REG_IDX_2] == 0)
+
+#define BCM_INT_BITMASK_SET(to, from) do { \
+	(to)->bits[BCM_INT_REG_IDX_0] = (from)->bits[BCM_INT_REG_IDX_0]; \
+	(to)->bits[BCM_INT_REG_IDX_1] = (from)->bits[BCM_INT_REG_IDX_1]; \
+	(to)->bits[BCM_INT_REG_IDX_2] = (from)->bits[BCM_INT_REG_IDX_2]; \
+} while (0)
+#define BCM_INT_BITMASK_OR(to, from) do { \
+	(to)->bits[BCM_INT_REG_IDX_0] |= (from)->bits[BCM_INT_REG_IDX_0]; \
+	(to)->bits[BCM_INT_REG_IDX_1] |= (from)->bits[BCM_INT_REG_IDX_1]; \
+	(to)->bits[BCM_INT_REG_IDX_2] |= (from)->bits[BCM_INT_REG_IDX_2]; \
+} while (0)
+
+#define BCM_INT_BITMASK_AND(to, mask) do { \
+	(to)->bits[BCM_INT_REG_IDX_0] &= (mask)->bits[BCM_INT_REG_IDX_0]; \
+	(to)->bits[BCM_INT_REG_IDX_1] &= (mask)->bits[BCM_INT_REG_IDX_1]; \
+	(to)->bits[BCM_INT_REG_IDX_2] &= (mask)->bits[BCM_INT_REG_IDX_2]; \
+} while (0)
+
+#else
+
+#define BCM_INT_BITMASK_IS_EQUAL(b, cmp) (\
+	(b)->bits[BCM_INT_REG_IDX_0] == (cmp)->bits[BCM_INT_REG_IDX_0] && \
+	(b)->bits[BCM_INT_REG_IDX_1] == (cmp)->bits[BCM_INT_REG_IDX_1]) \
+
+#define BCM_INT_BITMASK_IS_ZERO(b) (\
+	(b)->bits[BCM_INT_REG_IDX_0] == 0 && \
+	(b)->bits[BCM_INT_REG_IDX_1] == 0)
+
+#define BCM_INT_BITMASK_SET(to, from) do { \
+	(to)->bits[BCM_INT_REG_IDX_0] = (from)->bits[BCM_INT_REG_IDX_0]; \
+	(to)->bits[BCM_INT_REG_IDX_1] = (from)->bits[BCM_INT_REG_IDX_1]; \
+} while (0)
+
+#define BCM_INT_BITMASK_OR(to, from) do { \
+	(to)->bits[BCM_INT_REG_IDX_0] |= (from)->bits[BCM_INT_REG_IDX_0]; \
+	(to)->bits[BCM_INT_REG_IDX_1] |= (from)->bits[BCM_INT_REG_IDX_1]; \
+} while (0)
+
+#define BCM_INT_BITMASK_AND(to, mask) do { \
+	(to)->bits[BCM_INT_REG_IDX_0] &= (mask)->bits[BCM_INT_REG_IDX_0]; \
+	(to)->bits[BCM_INT_REG_IDX_1] &= (mask)->bits[BCM_INT_REG_IDX_1]; \
+} while (0)
+
+#endif /* ROM_COMPAT_INT_REG_IDX */
 
 #define WARM_BOOT	0xA0B0C0D0
 
-#ifdef BCM_BACKPLANE_TIMEOUT
+typedef struct si_axi_error_info si_axi_error_info_t;
 
+#ifdef AXI_TIMEOUTS_NIC
 #define SI_MAX_ERRLOG_SIZE	4
 typedef struct si_axi_error
 {
@@ -51,51 +121,56 @@ typedef struct si_axi_error
 	uint32 errlog_status;
 } si_axi_error_t;
 
-typedef struct si_axi_error_info
+struct si_axi_error_info
 {
 	uint32 count;
 	si_axi_error_t axi_error[SI_MAX_ERRLOG_SIZE];
-} si_axi_error_info_t;
-#endif /* BCM_BACKPLANE_TIMEOUT */
+};
+#endif /* AXI_TIMEOUTS_NIC */
 
 /**
  * Data structure to export all chip specific common variables
  *   public (read-only) portion of siutils handle returned by si_attach()/si_kattach()
  */
 struct si_pub {
-	uint	socitype;		/**< SOCI_SB, SOCI_AI */
+	bool	issim;			/**< chip is in simulation or emulation */
 
-	uint	bustype;		/**< SI_BUS, PCI_BUS */
-	uint	buscoretype;		/**< PCI_CORE_ID, PCIE_CORE_ID, PCMCIA_CORE_ID */
-	uint	buscorerev;		/**< buscore rev */
-	uint	buscoreidx;		/**< buscore index */
-	int	ccrev;			/**< chip common core rev */
+	uint16	socitype;		/**< SOCI_SB, SOCI_AI */
+	int16	socirev;		/**< SOC interconnect rev */
+
+	uint16	bustype;		/**< SI_BUS, PCI_BUS */
+	uint16	buscoretype;		/**< PCI_CORE_ID, PCIE_CORE_ID */
+	int16	buscorerev;		/**< buscore rev */
+	uint16	buscoreidx;		/**< buscore index */
+
+	int16	ccrev;			/**< chip common core rev */
 	uint32	cccaps;			/**< chip common capabilities */
 	uint32  cccaps_ext;			/**< chip common capabilities extension */
-	int	pmurev;			/**< pmu core rev */
+	int16	pmurev;			/**< pmu core rev */
 	uint32	pmucaps;		/**< pmu capabilities */
-	uint	boardtype;		/**< board type */
-	uint    boardrev;               /* board rev */
-	uint	boardvendor;		/**< board vendor */
-	uint	boardflags;		/**< board flags */
-	uint	boardflags2;		/**< board flags2 */
-	uint	boardflags4;		/**< board flags4 */
-	uint	chip;			/**< chip number */
-	uint	chiprev;		/**< chip revision */
-	uint	chippkg;		/**< chip package option */
+
+	uint32	boardtype;		/**< board type */
+	uint32	boardrev;               /* board rev */
+	uint32	boardvendor;		/**< board vendor */
+	uint32	boardflags;		/**< board flags */
+	uint32	boardflags2;		/**< board flags2 */
+	uint32	boardflags4;		/**< board flags4 */
+
+	uint32	chip;			/**< chip number */
+	uint16	chiprev;		/**< chip revision */
+	uint16	chippkg;		/**< chip package option */
 	uint32	chipst;			/**< chip status */
-	bool	issim;			/**< chip is in simulation or emulation */
-	uint    socirev;		/**< SOC interconnect rev */
-	bool	pci_pr32414;
-	int	gcirev;			/**< gci core rev */
-	int	lpflags;		/**< low power flags */
+
+	int16	gcirev;			/**< gci core rev */
+	int16	lhlrev;			/**< gci core rev */
+
+	uint32	lpflags;		/**< low power flags */
 	uint32	enum_base;	/**< backplane address where the chipcommon core resides */
-
-#ifdef BCM_BACKPLANE_TIMEOUT
-	si_axi_error_info_t * err_info;
-#endif /* BCM_BACKPLANE_TIMEOUT */
-
 	bool	_multibp_enable;
+	bool	rffe_debug_mode;
+	bool	rffe_elnabyp_mode;
+
+	si_axi_error_info_t * err_info;
 };
 
 /* for HIGH_ONLY driver, the si_t must be writable to allow states sync from BMAC to HIGH driver
@@ -112,7 +187,11 @@ typedef struct si_pub si_t;
  */
 #define	SI_OSH		NULL	/**< Use for si_kattach when no osh is available */
 
+#ifndef SOCI_NCI_BUS
 #define	BADIDX		(SI_MAXCORES + 1)
+#else
+#define	BADIDX		(0xffffu)	/* MAXCORES will be dynamically calculated for NCI. */
+#endif /* SOCI_NCI_BUS */
 
 /* clkctl xtal what flags */
 #define	XTAL			0x1	/**< primary crystal oscillator (2050) */
@@ -159,16 +238,26 @@ typedef struct si_pub si_t;
 #define SECI_ACCESS_UART_PUTC		7
 #define SECI_ACCESS_STATUSMASK_GET	8
 
+#if defined(BCMQT)
+#define	ISSIM_ENAB(sih)	TRUE
+#else /* !defined(BCMQT) */
 #define	ISSIM_ENAB(sih)	FALSE
+#endif /* defined(BCMQT) */
 
-#define INVALID_ADDR (~0)
+#if defined(ATE_BUILD)
+#define ATE_BLD_ENAB(sih)	TRUE
+#else
+#define ATE_BLD_ENAB(sih)	FALSE
+#endif
+
+#define INVALID_ADDR (0xFFFFFFFFu)
 
 /* PMU clock/power control */
 #if defined(BCMPMUCTL)
 #define PMUCTL_ENAB(sih)	(BCMPMUCTL)
 #else
 #define PMUCTL_ENAB(sih)	((sih)->cccaps & CC_CAP_PMU)
-#endif // endif
+#endif
 
 #if defined(BCMAOBENAB)
 #define AOB_ENAB(sih)  (BCMAOBENAB)
@@ -184,9 +273,11 @@ typedef struct si_pub si_t;
 #else
 #define CCCTL_ENAB(sih)		((sih)->cccaps & CC_CAP_PWR_CTL)
 #define CCPLL_ENAB(sih)		((sih)->cccaps & CC_CAP_PLL_MASK)
-#endif // endif
+#endif
 
 typedef void (*gci_gpio_handler_t)(uint32 stat, void *arg);
+
+typedef void (*wci2_handler_t)(void *ctx, char *buf, int len);
 
 /* External BT Coex enable mask */
 #define CC_BTCOEX_EN_MASK  0x01
@@ -196,6 +287,10 @@ typedef void (*gci_gpio_handler_t)(uint32 stat, void *arg);
 #define GPIO_CTRL_5_6_EN_MASK 0x60
 #define GPIO_CTRL_7_6_EN_MASK 0xC0
 #define GPIO_OUT_7_EN_MASK 0x80
+
+#define UCODE_WAKE_STATUS_BIT	1
+
+#if defined(BCMDONGLEHOST)
 
 /* CR4 specific defines used by the host driver */
 #define SI_CR4_CAP			(0x04)
@@ -213,6 +308,7 @@ typedef void (*gci_gpio_handler_t)(uint32 stat, void *arg);
 #define	ARMCR4_BUNITSZ_MASK	0x200
 #define	ARMCR4_BSZ_8K		8192
 #define	ARMCR4_BSZ_1K		1024
+#endif /* BCMDONGLEHOST */
 #define	SI_BPIND_1BYTE		0x1
 #define	SI_BPIND_2BYTE		0x3
 #define	SI_BPIND_4BYTE		0xF
@@ -223,65 +319,92 @@ typedef void (*gci_gpio_handler_t)(uint32 stat, void *arg);
 #define GET_GCI_CORE(sih)	\
 	(AOB_ENAB(sih)? si_findcoreidx(sih, GCI_CORE_ID, 0) : SI_CC_IDX)
 
-#include <osl_decl.h>
+#define VARBUF_PRIO_INVALID		0u
+#define VARBUF_PRIO_NVRAM		1u
+#define VARBUF_PRIO_SROM		2u
+#define VARBUF_PRIO_OTP			3u
+#define VARBUF_PRIO_SH_SFLASH		4u
+
+#define BT_IN_RESET_BIT_SHIFT		19u
+#define BT_IN_PDS_BIT_SHIFT		10u
+
 /* === exported functions === */
 extern si_t *si_attach(uint pcidev, osl_t *osh, volatile void *regs, uint bustype,
                        void *sdh, char **vars, uint *varsz);
 extern si_t *si_kattach(osl_t *osh);
 extern void si_detach(si_t *sih);
-extern volatile void *
-si_d11_switch_addrbase(si_t *sih, uint coreunit);
-extern uint si_corelist(si_t *sih, uint coreid[]);
-extern uint si_coreid(si_t *sih);
+extern volatile void *si_d11_switch_addrbase(si_t *sih, uint coreunit);
+extern uint si_corelist(const si_t *sih, uint coreid[]);
+extern uint si_coreid(const si_t *sih);
 extern uint si_flag(si_t *sih);
-extern uint si_flag_alt(si_t *sih);
+extern uint si_flag_alt(const si_t *sih);
 extern uint si_intflag(si_t *sih);
-extern uint si_coreidx(si_t *sih);
-extern uint si_coreunit(si_t *sih);
-extern uint si_corevendor(si_t *sih);
-extern uint si_corerev(si_t *sih);
-extern uint si_corerev_minor(si_t *sih);
+extern uint si_coreidx(const si_t *sih);
+extern uint si_get_num_cores(const si_t *sih);
+extern uint si_coreunit(const si_t *sih);
+extern uint si_corevendor(const si_t *sih);
+extern uint si_corerev(const si_t *sih);
+extern uint si_corerev_minor(const si_t *sih);
 extern void *si_osh(si_t *sih);
 extern void si_setosh(si_t *sih, osl_t *osh);
-extern int si_backplane_access(si_t *sih, uint addr, uint size,
-	uint *val, bool read);
+extern int si_backplane_access(si_t *sih, uint addr, uint size, uint *val, bool read);
+
+/* precommit failed when this is removed */
+/* BLAZAR_BRANCH_101_10_DHD_002/build/dhd/linux-fc30/brix-brcm */
+/* TBD: Revisit later */
+#ifdef BCMINTERNAL
+extern int si_backplane_access_64(si_t *sih, uint addr, uint size,
+    uint64 *val, bool read);
+#endif /* BCMINTERNAL */
+
 extern uint si_corereg(si_t *sih, uint coreidx, uint regoff, uint mask, uint val);
 extern uint si_corereg_writeonly(si_t *sih, uint coreidx, uint regoff, uint mask, uint val);
 extern uint si_pmu_corereg(si_t *sih, uint32 idx, uint regoff, uint mask, uint val);
 extern volatile uint32 *si_corereg_addr(si_t *sih, uint coreidx, uint regoff);
-extern volatile void *si_coreregs(si_t *sih);
-extern uint si_wrapperreg(si_t *sih, uint32 offset, uint32 mask, uint32 val);
+extern volatile void *si_coreregs(const si_t *sih);
+extern uint si_wrapperreg(const si_t *sih, uint32 offset, uint32 mask, uint32 val);
 extern uint si_core_wrapperreg(si_t *sih, uint32 coreidx, uint32 offset, uint32 mask, uint32 val);
-extern void *si_wrapperregs(si_t *sih);
-extern uint32 si_core_cflags(si_t *sih, uint32 mask, uint32 val);
-extern void si_core_cflags_wo(si_t *sih, uint32 mask, uint32 val);
-extern uint32 si_core_sflags(si_t *sih, uint32 mask, uint32 val);
+extern void *si_wrapperregs(const si_t *sih);
+extern uint32 si_core_cflags(const si_t *sih, uint32 mask, uint32 val);
+extern void si_core_cflags_wo(const si_t *sih, uint32 mask, uint32 val);
+extern uint32 si_core_sflags(const si_t *sih, uint32 mask, uint32 val);
 extern void si_commit(si_t *sih);
-extern bool si_iscoreup(si_t *sih);
-extern uint si_numcoreunits(si_t *sih, uint coreid);
-extern uint si_numd11coreunits(si_t *sih);
-extern uint si_findcoreidx(si_t *sih, uint coreid, uint coreunit);
+extern bool si_iscoreup(const si_t *sih);
+extern uint si_numcoreunits(const si_t *sih, uint coreid);
+extern uint si_numd11coreunits(const si_t *sih);
+extern uint si_findcoreidx(const si_t *sih, uint coreid, uint coreunit);
+extern uint si_findcoreid(const si_t *sih, uint coreidx);
 extern volatile void *si_setcoreidx(si_t *sih, uint coreidx);
 extern volatile void *si_setcore(si_t *sih, uint coreid, uint coreunit);
-extern uint32 si_oobr_baseaddr(si_t *sih, bool second);
-extern volatile void *si_switch_core(si_t *sih, uint coreid, uint *origidx, uint *intr_val);
-extern void si_restore_core(si_t *sih, uint coreid, uint intr_val);
-extern int si_numaddrspaces(si_t *sih);
-extern uint32 si_addrspace(si_t *sih, uint spidx, uint baidx);
-extern uint32 si_addrspacesize(si_t *sih, uint spidx, uint baidx);
-extern void si_coreaddrspaceX(si_t *sih, uint asidx, uint32 *addr, uint32 *size);
-extern int si_corebist(si_t *sih);
+extern uint32 si_oobr_baseaddr(const si_t *sih, bool second);
+#if !defined(BCMDONGLEHOST)
+extern uint si_corereg_ifup(si_t *sih, uint core_id, uint regoff, uint mask, uint val);
+extern void si_lowpwr_opt(si_t *sih);
+#endif /* !defined(BCMDONGLEHOST */
+extern volatile void *si_switch_core(si_t *sih, uint coreid, uint *origidx,
+	bcm_int_bitmask_t *intr_val);
+extern void si_restore_core(si_t *sih, uint coreid, bcm_int_bitmask_t *intr_val);
+#ifdef USE_NEW_COREREV_API
+extern uint si_corerev_ext(si_t *sih, uint coreid, uint coreunit);
+#else
+uint si_get_corerev(si_t *sih, uint core_id);
+#endif
+extern int si_numaddrspaces(const si_t *sih);
+extern uint32 si_addrspace(const si_t *sih, uint spidx, uint baidx);
+extern uint32 si_addrspacesize(const si_t *sih, uint spidx, uint baidx);
+extern void si_coreaddrspaceX(const si_t *sih, uint asidx, uint32 *addr, uint32 *size);
+extern int si_corebist(const si_t *sih);
 extern void si_core_reset(si_t *sih, uint32 bits, uint32 resetbits);
-extern void si_core_disable(si_t *sih, uint32 bits);
+extern void si_core_disable(const si_t *sih, uint32 bits);
 extern uint32 si_clock_rate(uint32 pll_type, uint32 n, uint32 m);
-extern uint si_chip_hostif(si_t *sih);
+extern uint si_chip_hostif(const si_t *sih);
 extern uint32 si_clock(si_t *sih);
 extern uint32 si_alp_clock(si_t *sih); /* returns [Hz] units */
 extern uint32 si_ilp_clock(si_t *sih); /* returns [Hz] units */
 extern void si_pci_setup(si_t *sih, uint coremask);
-extern void si_pcmcia_init(si_t *sih);
-extern void si_setint(si_t *sih, int siflag);
-extern bool si_backplane64(si_t *sih);
+extern int si_pcie_setup(si_t *sih, uint coreidx);
+extern void si_setint(const si_t *sih, int siflag);
+extern bool si_backplane64(const si_t *sih);
 extern void si_register_intr_callback(si_t *sih, void *intrsoff_fn, void *intrsrestore_fn,
 	void *intrsenabled_fn, void *intr_arg);
 extern void si_deregister_intr_callback(si_t *sih);
@@ -289,19 +412,14 @@ extern void si_clkctl_init(si_t *sih);
 extern uint16 si_clkctl_fast_pwrup_delay(si_t *sih);
 extern bool si_clkctl_cc(si_t *sih, uint mode);
 extern int si_clkctl_xtal(si_t *sih, uint what, bool on);
-extern uint32 si_gpiotimerval(si_t *sih, uint32 mask, uint32 val);
 extern void si_btcgpiowar(si_t *sih);
-extern bool si_deviceremoved(si_t *sih);
+extern bool si_deviceremoved(const si_t *sih);
 extern void si_set_device_removed(si_t *sih, bool status);
 extern uint32 si_sysmem_size(si_t *sih);
 extern uint32 si_socram_size(si_t *sih);
-extern uint32 si_socdevram_size(si_t *sih);
 extern uint32 si_socram_srmem_size(si_t *sih);
 extern void si_socram_set_bankpda(si_t *sih, uint32 bankidx, uint32 bankpda);
-extern void si_socdevram(si_t *sih, bool set, uint8 *ennable, uint8 *protect, uint8 *remap);
-extern bool si_socdevram_pkg(si_t *sih);
-extern bool si_socdevram_remap_isenb(si_t *sih);
-extern uint32 si_socdevram_remap_size(si_t *sih);
+extern bool si_is_bus_mpu_present(si_t *sih);
 
 extern void si_watchdog(si_t *sih, uint ticks);
 extern void si_watchdog_ms(si_t *sih, uint32 ms);
@@ -315,8 +433,8 @@ extern uint32 si_gpiointpolarity(si_t *sih, uint32 mask, uint32 val, uint8 prior
 extern uint32 si_gpiointmask(si_t *sih, uint32 mask, uint32 val, uint8 priority);
 extern uint32 si_gpioeventintmask(si_t *sih, uint32 mask, uint32 val, uint8 priority);
 extern uint32 si_gpioled(si_t *sih, uint32 mask, uint32 val);
-extern uint32 si_gpioreserve(si_t *sih, uint32 gpio_num, uint8 priority);
-extern uint32 si_gpiorelease(si_t *sih, uint32 gpio_num, uint8 priority);
+extern uint32 si_gpioreserve(const si_t *sih, uint32 gpio_num, uint8 priority);
+extern uint32 si_gpiorelease(const si_t *sih, uint32 gpio_num, uint8 priority);
 extern uint32 si_gpiopull(si_t *sih, bool updown, uint32 mask, uint32 val);
 extern uint32 si_gpioevent(si_t *sih, uint regtype, uint32 mask, uint32 val);
 extern uint32 si_gpio_int_enable(si_t *sih, bool enable);
@@ -326,6 +444,8 @@ extern uint8 si_gci_host_wake_gpio_init(si_t *sih);
 extern uint8 si_gci_time_sync_gpio_init(si_t *sih);
 extern void si_gci_host_wake_gpio_enable(si_t *sih, uint8 gpio, bool state);
 extern void si_gci_time_sync_gpio_enable(si_t *sih, uint8 gpio, bool state);
+extern void si_gci_host_wake_gpio_tristate(si_t *sih, uint8 gpio, bool state);
+extern int si_gpio_enable(si_t *sih, uint32 mask);
 
 extern void si_invalidate_second_bar0win(si_t *sih);
 
@@ -344,25 +464,27 @@ extern void *si_gci_gpioint_handler_register(si_t *sih, uint8 gpio, uint8 sts,
 	gci_gpio_handler_t cb, void *arg);
 extern void si_gci_gpioint_handler_unregister(si_t *sih, void* gci_i);
 
+extern void si_gci_gpio_chipcontrol_ex(si_t *si, uint8 gpoi, uint8 opt);
 extern uint8 si_gci_gpio_status(si_t *sih, uint8 gci_gpio, uint8 mask, uint8 value);
 extern void si_gci_config_wake_pin(si_t *sih, uint8 gpio_n, uint8 wake_events,
 	bool gci_gpio);
 extern void si_gci_free_wake_pin(si_t *sih, uint8 gpio_n);
+#if !defined(BCMDONGLEHOST)
+extern uint8 si_gci_gpio_wakemask(si_t *sih, uint8 gpio, uint8 mask, uint8 value);
+extern uint8 si_gci_gpio_intmask(si_t *sih, uint8 gpio, uint8 mask, uint8 value);
+#endif /* !defined(BCMDONGLEHOST) */
 
 /* Wake-on-wireless-LAN (WOWL) */
-extern bool si_pci_pmecap(si_t *sih);
-extern bool si_pci_fastpmecap(struct osl_info *osh);
-extern bool si_pci_pmestat(si_t *sih);
-extern void si_pci_pmeclr(si_t *sih);
-extern void si_pci_pmeen(si_t *sih);
-extern void si_pci_pmestatclr(si_t *sih);
+extern bool si_pci_pmestat(const si_t *sih);
+extern void si_pci_pmeclr(const si_t *sih);
+extern void si_pci_pmeen(const si_t *sih);
+extern void si_pci_pmestatclr(const si_t *sih);
 extern uint si_pcie_readreg(void *sih, uint addrtype, uint offset);
 extern uint si_pcie_writereg(void *sih, uint addrtype, uint offset, uint val);
-extern void si_deepsleep_count(si_t *sih, bool arm_wakeup);
 
 #ifdef BCMSDIO
 extern void si_sdio_init(si_t *sih);
-#endif // endif
+#endif
 
 extern uint16 si_d11_devid(si_t *sih);
 extern int si_corepciid(si_t *sih, uint func, uint16 *pcivendor, uint16 *pcidevice,
@@ -373,25 +495,44 @@ extern volatile void* si_seci_init(si_t *sih, uint8 seci_mode);
 extern void si_seci_clk_force(si_t *sih, bool val);
 extern bool si_seci_clk_force_status(si_t *sih);
 
+#if (defined(BCMECICOEX) && !defined(BCMDONGLEHOST))
+extern bool si_eci(const si_t *sih);
+extern int si_eci_init(si_t *sih);
+extern void si_eci_notify_bt(si_t *sih, uint32 mask, uint32 val, bool interrupt);
+extern bool si_seci(const si_t *sih);
+extern void* si_gci_init(si_t *sih);
+extern void si_seci_down(si_t *sih);
+extern void si_seci_upd(si_t *sih, bool enable);
+extern bool si_gci(const si_t *sih);
+extern bool si_sraon(const si_t *sih);
+#else
 #define si_eci(sih) 0
-static INLINE void * si_eci_init(si_t *sih) {return NULL;}
+#define si_eci_init(sih) 0
 #define si_eci_notify_bt(sih, type, val)  (0)
 #define si_seci(sih) 0
 #define si_seci_upd(sih, a)	do {} while (0)
-static INLINE void * si_gci_init(si_t *sih) {return NULL;}
+#define si_gci_init(sih) NULL
 #define si_seci_down(sih) do {} while (0)
 #define si_gci(sih) 0
+#define si_sraon(sih) 0
+#endif /* BCMECICOEX */
 
 /* OTP status */
-extern bool si_is_otp_disabled(si_t *sih);
+extern bool si_is_otp_disabled(const si_t *sih);
 extern bool si_is_otp_powered(si_t *sih);
 extern void si_otp_power(si_t *sih, bool on, uint32* min_res_mask);
 
 /* SPROM availability */
 extern bool si_is_sprom_available(si_t *sih);
+#ifdef SI_SPROM_PROBE
+extern void si_sprom_init(si_t *sih);
+#endif /* SI_SPROM_PROBE */
+
+/* SFlash availability */
+bool si_is_sflash_available(const si_t *sih);
 
 /* OTP/SROM CIS stuff */
-extern int si_cis_source(si_t *sih);
+extern int si_cis_source(const si_t *sih);
 #define CIS_DEFAULT	0
 #define CIS_SROM	1
 #define CIS_OTP		2
@@ -402,40 +543,43 @@ extern int si_cis_source(si_t *sih);
 #define	TSMC_FAB12	0x2	/**< TSMC Fab12/Fab14 chip */
 #define	SMIC_FAB4	0x3	/**< SMIC Fab4 chip */
 
-extern uint16 si_fabid(si_t *sih);
-extern uint16 si_chipid(si_t *sih);
+/* bp_ind_access default timeout */
+#define BP_ACCESS_TO (500u * 1000u)
+
+extern uint16 BCMATTACHFN(si_fabid)(si_t *sih);
+extern uint16 BCMINITFN(si_chipid)(const si_t *sih);
 
 /*
  * Build device path. Path size must be >= SI_DEVPATH_BUFSZ.
  * The returned path is NULL terminated and has trailing '/'.
  * Return 0 on success, nonzero otherwise.
  */
-extern int si_devpath(si_t *sih, char *path, int size);
-extern int si_devpath_pcie(si_t *sih, char *path, int size);
+extern int si_devpath(const si_t *sih, char *path, int size);
+extern int si_devpath_pcie(const si_t *sih, char *path, int size);
 /* Read variable with prepending the devpath to the name */
-extern char *si_getdevpathvar(si_t *sih, const char *name);
-extern int si_getdevpathintvar(si_t *sih, const char *name);
-extern char *si_coded_devpathvar(si_t *sih, char *varname, int var_len, const char *name);
+extern char *si_getdevpathvar(const si_t *sih, const char *name);
+extern int si_getdevpathintvar(const si_t *sih, const char *name);
+extern char *si_coded_devpathvar(const si_t *sih, char *varname, int var_len, const char *name);
 
-extern uint8 si_pcieclkreq(si_t *sih, uint32 mask, uint32 val);
-extern uint32 si_pcielcreg(si_t *sih, uint32 mask, uint32 val);
-extern uint8 si_pcieltrenable(si_t *sih, uint32 mask, uint32 val);
-extern uint8 si_pcieobffenable(si_t *sih, uint32 mask, uint32 val);
-extern uint32 si_pcieltr_reg(si_t *sih, uint32 reg, uint32 mask, uint32 val);
-extern uint32 si_pcieltrspacing_reg(si_t *sih, uint32 mask, uint32 val);
-extern uint32 si_pcieltrhysteresiscnt_reg(si_t *sih, uint32 mask, uint32 val);
-extern void si_pcie_set_error_injection(si_t *sih, uint32 mode);
-extern void si_pcie_set_L1substate(si_t *sih, uint32 substate);
-extern uint32 si_pcie_get_L1substate(si_t *sih);
-extern void si_war42780_clkreq(si_t *sih, bool clkreq);
-extern void si_pci_down(si_t *sih);
-extern void si_pci_up(si_t *sih);
-extern void si_pci_sleep(si_t *sih);
-extern void si_pcie_war_ovr_update(si_t *sih, uint8 aspm);
-extern void si_pcie_power_save_enable(si_t *sih, bool enable);
-extern void si_pcie_extendL1timer(si_t *sih, bool extend);
+/* === HW PR WARs === */
+extern uint8 si_pcieclkreq(const si_t *sih, uint32 mask, uint32 val);
+extern uint32 si_pcielcreg(const si_t *sih, uint32 mask, uint32 val);
+extern uint8 si_pcieltrenable(const si_t *sih, uint32 mask, uint32 val);
+extern uint8 si_pcieobffenable(const si_t *sih, uint32 mask, uint32 val);
+extern uint32 si_pcieltr_reg(const si_t *sih, uint32 reg, uint32 mask, uint32 val);
+extern uint32 si_pcieltrspacing_reg(const si_t *sih, uint32 mask, uint32 val);
+extern uint32 si_pcieltrhysteresiscnt_reg(const si_t *sih, uint32 mask, uint32 val);
+extern void si_pcie_set_error_injection(const si_t *sih, uint32 mode);
+extern void si_pcie_set_L1substate(const si_t *sih, uint32 substate);
+#ifndef BCM_BOOTLOADER
+extern uint32 si_pcie_get_L1substate(const si_t *sih);
+#endif /* BCM_BOOTLOADER */
+extern void si_pci_down(const si_t *sih);
+extern void si_pci_up(const si_t *sih);
+extern void si_pci_sleep(const si_t *sih);
+extern void si_pcie_war_ovr_update(const si_t *sih, uint8 aspm);
+extern void si_pcie_power_save_enable(const si_t *sih, bool enable);
 extern int si_pci_fixcfg(si_t *sih);
-extern void si_chippkg_set(si_t *sih, uint);
 extern bool si_is_warmboot(void);
 
 extern void si_chipcontrl_restore(si_t *sih, uint32 val);
@@ -448,48 +592,82 @@ extern void si_pmu_avb_clk_set(si_t *sih, osl_t *osh, bool set_flag);
 
 extern bool si_taclear(si_t *sih, bool details);
 
-#if defined(BCMDBG_PHYDUMP)
+#ifdef BCMDBG
+extern void si_view(si_t *sih, bool verbose);
+extern void si_viewall(si_t *sih, bool verbose);
+#endif /* BCMDBG */
+#if defined(BCMDBG) || defined(BCMDBG_DUMP) || defined(BCMDBG_PHYDUMP) || \
+	defined(WLTEST)
 struct bcmstrbuf;
-extern int si_dump_pcieinfo(si_t *sih, struct bcmstrbuf *b);
+extern int si_dump_pcieinfo(const si_t *sih, struct bcmstrbuf *b);
 extern void si_dump_pmuregs(si_t *sih, struct bcmstrbuf *b);
-extern int si_dump_pcieregs(si_t *sih, struct bcmstrbuf *b);
-#endif // endif
+extern int si_dump_pcieregs(const si_t *sih, struct bcmstrbuf *b);
+#endif /* BCMDBG || BCMDBG_DUMP || WLTEST */
 
-#if defined(BCMDBG_PHYDUMP)
+#if defined(BCMDBG) || defined(BCMDBG_DUMP) || defined(BCMDBG_PHYDUMP)
+extern void si_dump(const si_t *sih, struct bcmstrbuf *b);
+extern void si_ccreg_dump(si_t *sih, struct bcmstrbuf *b);
+extern void si_clkctl_dump(si_t *sih, struct bcmstrbuf *b);
+extern int si_gpiodump(si_t *sih, struct bcmstrbuf *b);
+
 extern void si_dumpregs(si_t *sih, struct bcmstrbuf *b);
-#endif // endif
+#endif /* BCMDBG || BCMDBG_DUMP || BCMDBG_PHYDUMP */
 
 extern uint32 si_ccreg(si_t *sih, uint32 offset, uint32 mask, uint32 val);
-extern uint32 si_pciereg(si_t *sih, uint32 offset, uint32 mask, uint32 val, uint type);
+extern uint32 si_pciereg(const si_t *sih, uint32 offset, uint32 mask, uint32 val, uint type);
 extern int si_bpind_access(si_t *sih, uint32 addr_high, uint32 addr_low,
-	int32* data, bool read);
+	int32* data, bool read, uint32 us_timeout);
+extern void sih_write_sraon(si_t *sih, int offset, int len, const uint32* data);
 #ifdef SR_DEBUG
 extern void si_dump_pmu(si_t *sih, void *pmu_var);
-extern void si_pmu_keep_on(si_t *sih, int32 int_val);
-extern uint32 si_pmu_keep_on_get(si_t *sih);
+extern void si_pmu_keep_on(const si_t *sih, int32 int_val);
+extern uint32 si_pmu_keep_on_get(const si_t *sih);
 extern uint32 si_power_island_set(si_t *sih, uint32 int_val);
 extern uint32 si_power_island_get(si_t *sih);
 #endif /* SR_DEBUG */
-extern uint32 si_pcieserdesreg(si_t *sih, uint32 mdioslave, uint32 offset, uint32 mask, uint32 val);
-extern void si_pcie_set_request_size(si_t *sih, uint16 size);
-extern uint16 si_pcie_get_request_size(si_t *sih);
-extern void si_pcie_set_maxpayload_size(si_t *sih, uint16 size);
-extern uint16 si_pcie_get_maxpayload_size(si_t *sih);
-extern uint16 si_pcie_get_ssid(si_t *sih);
-extern uint32 si_pcie_get_bar0(si_t *sih);
-extern int si_pcie_configspace_cache(si_t *sih);
-extern int si_pcie_configspace_restore(si_t *sih);
-extern int si_pcie_configspace_get(si_t *sih, uint8 *buf, uint size);
 
-#ifdef BCM_BACKPLANE_TIMEOUT
-extern const si_axi_error_info_t * si_get_axi_errlog_info(si_t *sih);
-extern void si_reset_axi_errlog_info(si_t * sih);
-#endif /* BCM_BACKPLANE_TIMEOUT */
+extern uint32 si_pcieserdesreg(const si_t *sih, uint32 mdioslave, uint32 offset,
+	uint32 mask, uint32 val);
+extern void si_pcie_set_request_size(const si_t *sih, uint16 size);
+extern uint16 si_pcie_get_request_size(const si_t *sih);
+extern void si_pcie_set_maxpayload_size(const si_t *sih, uint16 size);
+extern uint16 si_pcie_get_maxpayload_size(const si_t *sih);
+extern uint16 si_pcie_get_ssid(const si_t *sih);
+extern uint32 si_pcie_get_bar0(const si_t *sih);
+extern int si_pcie_configspace_cache(const si_t *sih);
+extern int si_pcie_configspace_restore(const si_t *sih);
+extern int si_pcie_configspace_get(const si_t *sih, uint8 *buf, uint size);
 
-extern void si_update_backplane_timeouts(si_t *sih, bool enable, uint32 timeout, uint32 cid);
+#ifndef BCMDONGLEHOST
+extern void si_muxenab(si_t *sih, uint32 w);
+extern uint32 si_clear_backplane_to(si_t *sih);
+extern void si_slave_wrapper_add(si_t *sih);
 
+#ifdef AXI_TIMEOUTS_NIC
+extern uint32 si_clear_backplane_to_fast(void *sih, void *addr);
+#endif /* AXI_TIMEOUTS_NIC */
+
+#if defined(AXI_TIMEOUTS) || defined(AXI_TIMEOUTS_NIC)
+extern uint32 si_clear_backplane_to_per_core(si_t *sih, uint coreid, uint coreunit, void *wrap);
+#endif /* AXI_TIMEOUTS || AXI_TIMEOUTS_NIC */
+#endif /* !BCMDONGLEHOST */
+
+extern uint32 si_findcoreidx_by_axiid(const si_t *sih, uint32 axiid);
+extern void si_wrapper_get_last_error(const si_t *sih, uint32 *error_status, uint32 *core,
+	uint32 *lo, uint32 *hi, uint32 *id);
+extern uint32 si_get_axi_timeout_reg(const si_t *sih);
+
+#ifdef AXI_TIMEOUTS_NIC
+extern const si_axi_error_info_t * si_get_axi_errlog_info(const si_t *sih);
+extern void si_reset_axi_errlog_info(const si_t * sih);
+#endif /* AXI_TIMEOUTS_NIC */
+
+extern void si_update_backplane_timeouts(const si_t *sih, bool enable, uint32 timeout, uint32 cid);
+
+#if defined(BCMDONGLEHOST)
 extern uint32 si_tcm_size(si_t *sih);
 extern bool si_has_flops(si_t *sih);
+#endif /* BCMDONGLEHOST */
 
 extern int si_set_sromctl(si_t *sih, uint32 value);
 extern uint32 si_get_sromctl(si_t *sih);
@@ -504,6 +682,10 @@ extern void si_gci_reset(si_t *sih);
 extern void si_ercx_init(si_t *sih, uint32 ltecx_mux, uint32 ltecx_padnum,
 	uint32 ltecx_fnsel, uint32 ltecx_gcigpio);
 #endif /* BCMLTECOEX */
+#if defined(BCMLTECOEX) && !defined(WLTEST)
+extern int si_wci2_rxfifo_handler_register(si_t *sih, wci2_handler_t rx_cb, void *ctx);
+extern void si_wci2_rxfifo_handler_unregister(si_t *sih);
+#endif /* BCMLTECOEX && !WLTEST */
 extern void si_gci_seci_init(si_t *sih);
 extern void si_wci2_init(si_t *sih, uint8 baudrate, uint32 ltecx_mux, uint32 ltecx_padnum,
 	uint32 ltecx_fnsel, uint32 ltecx_gcigpio, uint32 xtalfreq);
@@ -539,32 +721,23 @@ void si_update_masks(si_t *sih);
 void si_force_islanding(si_t *sih, bool enable);
 extern uint32 si_pmu_res_req_timer_clr(si_t *sih);
 extern void si_pmu_rfldo(si_t *sih, bool on);
-extern uint32 si_pcie_set_ctrlreg(si_t *sih, uint32 sperst_mask, uint32 spert_val);
-extern void si_pcie_ltr_war(si_t *sih);
-extern void si_pcie_hw_LTR_war(si_t *sih);
-extern void si_pcie_hw_L1SS_war(si_t *sih);
-extern void si_pciedev_crwlpciegen2(si_t *sih);
-extern void si_pcie_prep_D3(si_t *sih, bool enter_D3);
-extern void si_pciedev_reg_pm_clk_period(si_t *sih);
-extern void si_d11rsdb_core1_alt_reg_clk_dis(si_t *sih);
-extern void si_d11rsdb_core1_alt_reg_clk_en(si_t *sih);
-extern void si_pcie_disable_oobselltr(si_t *sih);
-extern uint32 si_raw_reg(si_t *sih, uint32 reg, uint32 val, uint32 wrire_req);
-
-#ifdef WLRSDB
-extern void si_d11rsdb_core_disable(si_t *sih, uint32 bits);
-extern void si_d11rsdb_core_reset(si_t *sih, uint32 bits, uint32 resetbits);
-extern void set_secondary_d11_core(si_t *sih, volatile void **secmap, volatile void **secwrap);
-#endif // endif
+extern void si_pcie_ltr_war(const si_t *sih);
+extern void si_pcie_hw_LTR_war(const si_t *sih);
+extern void si_pcie_hw_L1SS_war(const si_t *sih);
+extern void si_pciedev_crwlpciegen2(const si_t *sih);
+extern void si_pcie_prep_D3(const si_t *sih, bool enter_D3);
+extern void si_pciedev_reg_pm_clk_period(const si_t *sih);
+extern void si_pcie_disable_oobselltr(const si_t *sih);
+extern uint32 si_raw_reg(const si_t *sih, uint32 reg, uint32 val, uint32 wrire_req);
 
 /* Macro to enable clock gating changes in different cores */
-#define MEM_CLK_GATE_BIT 	5
-#define GCI_CLK_GATE_BIT 	18
+#define MEM_CLK_GATE_BIT	5
+#define GCI_CLK_GATE_BIT	18
 
 #define USBAPP_CLK_BIT		0
 #define PCIE_CLK_BIT		3
 #define ARMCR4_DBG_CLK_BIT	4
-#define SAMPLE_SYNC_CLK_BIT 	17
+#define SAMPLE_SYNC_CLK_BIT	17
 #define PCIE_TL_CLK_BIT		18
 #define HQ_REQ_BIT		24
 #define PLL_DIV2_BIT_START	9
@@ -576,11 +749,6 @@ extern void set_secondary_d11_core(si_t *sih, volatile void **secmap, volatile v
 		si_pmu_corereg(si, si_findcoreidx(si, PMU_CORE_ID, 0), \
 			       OFFSETOF(pmuregs_t, member), mask, val): \
 		si_pmu_corereg(si, cc_idx, OFFSETOF(chipcregs_t, member), mask, val))
-
-/* Used only for the regs present in the pmu core and not present in the old cc core */
-#define PMU_REG_NEW(si, member, mask, val) \
-		si_corereg(si, si_findcoreidx(si, PMU_CORE_ID, 0), \
-			OFFSETOF(pmuregs_t, member), mask, val)
 
 #define PMU_REG(si, member, mask, val) \
 	(AOB_ENAB(si) ? \
@@ -728,55 +896,64 @@ extern void set_secondary_d11_core(si_t *sih, volatile void **secmap, volatile v
 /* Bit offset of ECI bit no x in 32-bit words */
 #define GCI_BITOFFSET(x)			((x)%GCI_REG_WIDTH)
 
+#define GCI_ECI_HW0(ip_id)	(((ip_id) * GCI_EVENT_BITS_PER_CORE) + 0)
+#define GCI_ECI_HW1(ip_id)	(((ip_id) * GCI_EVENT_BITS_PER_CORE) + 1)
+#define GCI_ECI_SW0(ip_id)	(((ip_id) * GCI_EVENT_BITS_PER_CORE) + 2)
+#define GCI_ECI_SW1(ip_id)	(((ip_id) * GCI_EVENT_BITS_PER_CORE) + 3)
+
 /* BT SMEM Control Register 0 */
 #define GCI_BT_SMEM_CTRL0_SUBCORE_ENABLE_PKILL	(1 << 28)
 
-/* End - GCI Macros */
+/* GCI RXFIFO Common control */
+#define GCI_RXFIFO_CTRL_AUX_EN		0xFF
+#define GCI_RXFIFO_CTRL_FIFO_EN		0xFF00
+#define GCI_RXFIFO_CTRL_FIFO_TYPE2_EN	0x400
 
-#define AXI_OOB		0x7
+/* End - GCI Macros */
 
 extern void si_pll_sr_reinit(si_t *sih);
 extern void si_pll_closeloop(si_t *sih);
-void si_config_4364_d11_oob(si_t *sih, uint coreid);
-extern void si_gci_set_femctrl(si_t *sih, osl_t *osh, bool set);
-extern void si_gci_set_femctrl_mask_ant01(si_t *sih, osl_t *osh, bool set);
-extern uint si_num_slaveports(si_t *sih, uint coreid);
+extern uint si_num_slaveports(const si_t *sih, uint coreid);
 extern uint32 si_get_slaveport_addr(si_t *sih, uint spidx, uint baidx,
 	uint core_id, uint coreunit);
 extern uint32 si_get_d11_slaveport_addr(si_t *sih, uint spidx,
 	uint baidx, uint coreunit);
-uint si_introff(si_t *sih);
-void si_intrrestore(si_t *sih, uint intr_val);
-void si_nvram_res_masks(si_t *sih, uint32 *min_mask, uint32 *max_mask);
-extern uint32 si_xtalfreq(si_t *sih);
-extern uint8 si_getspurmode(si_t *sih);
-extern uint32 si_get_openloop_dco_code(si_t *sih);
+void si_introff(const si_t *sih, bcm_int_bitmask_t *intr_val);
+void si_intrrestore(const si_t *sih, bcm_int_bitmask_t *intr_val);
+bool si_get_nvram_rfldo3p3_war(const si_t *sih);
+void si_nvram_res_masks(const si_t *sih, uint32 *min_mask, uint32 *max_mask);
+extern uint32 si_xtalfreq(const si_t *sih);
+extern uint8 si_getspurmode(const si_t *sih);
+extern uint32 si_get_openloop_dco_code(const si_t *sih);
 extern void si_set_openloop_dco_code(si_t *sih, uint32 openloop_dco_code);
-extern uint32 si_wrapper_dump_buf_size(si_t *sih);
-extern uint32 si_wrapper_dump_binary(si_t *sih, uchar *p);
-extern uint32 si_wrapper_dump_last_timeout(si_t *sih, uint32 *error, uint32 *core, uint32 *ba,
-	uchar *p);
+extern uint32 si_wrapper_dump_buf_size(const si_t *sih);
+extern uint32 si_wrapper_dump_binary(const si_t *sih, uchar *p);
+extern uint32 si_wrapper_dump_last_timeout(const si_t *sih, uint32 *error, uint32 *core,
+	uint32 *ba, uchar *p);
 
 /* SR Power Control */
-extern uint32 si_srpwr_request(si_t *sih, uint32 mask, uint32 val);
-extern uint32 si_srpwr_stat_spinwait(si_t *sih, uint32 mask, uint32 val);
+extern uint32 si_srpwr_request(const si_t *sih, uint32 mask, uint32 val);
+extern uint32 si_srpwr_request_on_rev80(si_t *sih, uint32 mask, uint32 val,
+	uint32 ucode_awake);
+extern uint32 si_srpwr_stat_spinwait(const si_t *sih, uint32 mask, uint32 val);
 extern uint32 si_srpwr_stat(si_t *sih);
 extern uint32 si_srpwr_domain(si_t *sih);
-extern uint32 si_srpwr_domain_all_mask(si_t *sih);
-
+extern uint32 si_srpwr_domain_all_mask(const si_t *sih);
+extern uint8 si_srpwr_domain_wl(si_t *sih);
+extern uint32 si_srpwr_bt_status(si_t *sih);
 /* SR Power Control */
-	/* No capabilities bit so using chipid for now */
-#define SRPWR_CAP(sih)  (BCM4347_CHIP(sih->chip) || BCM4369_CHIP(sih->chip))
+bool si_srpwr_cap(si_t *sih);
+#define SRPWR_CAP(sih) (si_srpwr_cap(sih))
 
 #ifdef BCMSRPWR
 	extern bool _bcmsrpwr;
-	#if defined(ROM_ENAB_RUNTIME_CHECK) || !defined(DONGLEBUILD)
-		#define SRPWR_ENAB()    (_bcmsrpwr)
-	#elif defined(BCMSRPWR_DISABLED)
-		#define SRPWR_ENAB()    (0)
-	#else
-		#define SRPWR_ENAB()    (1)
-	#endif
+#if defined(ROM_ENAB_RUNTIME_CHECK) || !defined(DONGLEBUILD)
+	#define SRPWR_ENAB()    (_bcmsrpwr)
+#elif defined(BCMSRPWR_DISABLED)
+	#define SRPWR_ENAB()    (0)
+#else
+	#define SRPWR_ENAB()    (1)
+#endif
 #else
 	#define SRPWR_ENAB()            (0)
 #endif /* BCMSRPWR */
@@ -790,20 +967,91 @@ extern uint32 si_srpwr_domain_all_mask(si_t *sih);
  *      ARM, TCM, Main, Aux
  *      Host needs to power up
  */
-#define MULTIBP_CAP(sih)	(FALSE)
+#define MULTIBP_CAP(sih)	(BCM4378_CHIP(sih->chip) || \
+				BCM4387_CHIP(sih->chip) || BCM4388_CHIP(sih->chip) || \
+				BCM4389_CHIP(sih->chip) || BCM4385_CHIP(sih->chip) || \
+				BCM4376_CHIP(sih->chip) || BCM4397_CHIP(sih->chip))
 #define MULTIBP_ENAB(sih)      ((sih) && (sih)->_multibp_enable)
+
+#ifdef DONGLEBUILD
+extern bool si_check_enable_backplane_log(const si_t *sih);
+#endif /* DONGLEBUILD */
 
 uint32 si_enum_base(uint devid);
 
-extern uint8 si_lhl_ps_mode(si_t *sih);
+/* Default ARM PLL freq 4369/4368 */
+#define ARMPLL_FREQ_400MHZ             (400u)
+#define ARMPLL_FREQ_800MHZ	       (800u)
+/* ARM PLL freq computed using chip defaults is 1002.8235 Mhz */
+#define ARMPLL_FREQ_1000MHZ	       (1003u)
+
+extern uint8 si_lhl_ps_mode(const si_t *sih);
+extern uint32 si_get_armpllclkfreq(const si_t *sih);
+uint8 si_get_ccidiv(const si_t *sih);
+extern uint8 si_hib_ext_wakeup_isenab(const si_t *sih);
 
 #ifdef UART_TRAP_DBG
-void ai_dump_APB_Bridge_registers(si_t *sih);
+void si_dump_APB_Bridge_registers(const si_t *sih);
 #endif /* UART_TRAP_DBG */
+void si_force_clocks(const si_t *sih, uint clock_state);
 
-void si_clrirq_idx(si_t *sih, uint core_idx);
+#if defined(BCMSDIODEV_ENABLED) && defined(ATE_BUILD)
+bool si_chipcap_sdio_ate_only(const si_t *sih);
+#endif /* BCMSDIODEV_ENABLED && ATE_BUILD */
+
+/* indicates to the siutils how the PICe BAR0 is mappend.
+ * here is the current scheme, which are all using BAR0:
+ * id     enum       wrapper
+ * ====   =========  =========
+ *    0   0000-0FFF  1000-1FFF
+ *    1   4000-4FFF  5000-5FFF
+ *    2   9000-9FFF  A000-AFFF
+ * >= 3   not supported
+ */
+void si_set_slice_id(si_t *sih, uint8 slice);
+uint8 si_get_slice_id(const si_t *sih);
+
+/* query the d11 core type */
+#define D11_CORE_TYPE_NORM	0u
+#define D11_CORE_TYPE_SCAN	1u
+uint si_core_d11_type(si_t *sih, uint coreunit);
+
+/* check if the package option allows the d11 core */
+bool si_pkgopt_d11_allowed(si_t *sih, uint coreuint);
 
 /* return if scan core is present */
-bool si_scan_core_present(si_t *sih);
+bool si_scan_core_present(const si_t *sih);
+void si_configure_pwrthrottle_gpio(si_t *sih, uint8 pwrthrottle_gpio_pin);
+void si_configure_onbody_gpio(si_t *sih, uint8 onbody_gpio_pin);
+
+/* check if HWA core present */
+bool si_hwa_present(const si_t *sih);
+
+/* check if SYSMEM present */
+bool si_sysmem_present(const si_t *sih);
+
+/* return BT state */
+bool si_btc_bt_status_in_reset(si_t *sih);
+bool si_btc_bt_status_in_pds(si_t *sih);
+int si_btc_bt_pds_wakeup_force(si_t *sih, bool force);
+
+/* RFFE RFEM Functions */
+#ifndef BCMDONGLEHOST
+void si_rffe_rfem_init(si_t *sih);
+void si_rffe_set_debug_mode(si_t *sih, bool enable);
+bool si_rffe_get_debug_mode(si_t *sih);
+int si_rffe_set_elnabyp_mode(si_t *sih, uint8 mode);
+int8 si_rffe_get_elnabyp_mode(si_t *sih);
+int si_rffe_rfem_read(si_t *sih, uint8 dev_id, uint8 antenna, uint16 reg_addr, uint32 *val);
+int si_rffe_rfem_write(si_t *sih, uint8 dev_id, uint8 antenna, uint16 reg_addr, uint32 data);
+#endif /* !BCMDONGLEHOST */
+extern void si_jtag_udr_pwrsw_main_toggle(si_t *sih, bool on);
+extern int si_pmu_res_state_pwrsw_main_wait(si_t *sih);
+extern uint32 si_d11_core_sssr_addr(si_t *sih, uint unit, uint32 *sssr_dmp_sz);
+
+#ifdef USE_LHL_TIMER
+/* Get current HIB time API */
+uint32 si_cur_hib_time(si_t *sih);
+#endif
 
 #endif	/* _siutils_h_ */

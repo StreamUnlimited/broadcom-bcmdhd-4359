@@ -1,7 +1,7 @@
 /*
  * Broadcom HND chip & on-chip-interconnect-related definitions.
  *
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -17,14 +17,8 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
  *
- *
- * <<Broadcom-WL-IPTag/Open:>>
- *
- * $Id: hndsoc.h 795345 2018-12-18 16:52:03Z $
+ * <<Broadcom-WL-IPTag/Dual:>>
  */
 
 #ifndef	_HNDSOC_H
@@ -45,24 +39,27 @@
 #define	SI_SDRAM_SWAPPED	0x10000000	/* Byteswapped Physical SDRAM */
 #define SI_SDRAM_R2		0x80000000	/* Region 2 for sdram (512 MB) */
 
-#ifdef STB_SOC_WIFI
-#define SI_REG_BASE_SIZE	0xB000		/* size from 0xf1800000 to 0xf180AFFF (44KB) */
-#define SI_ENUM_BASE_DEFAULT		0xF1800000	/* Enumeration space base */
-#define SI_WRAP_BASE_DEFAULT		0xF1900000	/* Wrapper space base */
-#endif /* STB_SOC_WIFI */
-
 #ifndef SI_ENUM_BASE_DEFAULT
 #define SI_ENUM_BASE_DEFAULT		0x18000000	/* Enumeration space base */
-#endif // endif
+#endif
 
 #ifndef SI_WRAP_BASE_DEFAULT
 #define SI_WRAP_BASE_DEFAULT		0x18100000	/* Wrapper space base */
-#endif // endif
+#endif
+
+#define WL_BRIDGE1_S	(0x18132000)
+#define WL_BRIDGE2_S	(0x18133000)
 
 /** new(er) chips started locating their chipc core at a different BP address than 0x1800_0000 */
+#ifdef DONGLEBUILD
+// firmware is always compiled for a particular chip
+#define SI_ENUM_BASE(sih)	SI_ENUM_BASE_DEFAULT
+#define SI_WRAP_BASE(sih)	SI_WRAP_BASE_DEFAULT
+#else
 // NIC and DHD driver binaries should support both old(er) and new(er) chips at the same time
 #define SI_ENUM_BASE(sih)	((sih)->enum_base)
 #define SI_WRAP_BASE(sih)	(SI_ENUM_BASE(sih) + 0x00100000)
+#endif /* DONGLEBUILD */
 
 #define SI_CORE_SIZE		0x1000		/* each core gets 4Kbytes for registers */
 
@@ -71,8 +68,23 @@
 #define SI_GPV_RD_CAP_EN	0x1	/* issue read */
 #define SI_GPV_WR_CAP_EN	0x2	/* issue write */
 
+#define SI_GPV_SL4_BM_ADDR  0x44024 /* NIC-400 Slave interface 4 Bypass merge */
+#define SI_GPV_SL6_BM_ADDR  0x46024 /* NIC-400 Slave interface 6 Bypass merge */
+#define SI_GPV_SL8_BM_ADDR  0x4a024 /* NIC-400 Slave interface 8 Bypass merge */
+#define SI_GPV_SL9_BM_ADDR  0x4b024 /* NIC-400 Slave interface 9 Bypass merge */
+
+/* AXI Slave Interface Block (ASIB) offsets */
+#define ASIB_FN_MOD2		0x24
+
 #ifndef SI_MAXCORES
+#ifdef _RTE_
+#define	SI_MAXCORES		16		/* Max cores (this is arbitrary, for software
+					 * convenience and could be changed if we
+					 * make any larger chips
+					 */
+#else
 #define	SI_MAXCORES		32		/* NorthStar has more cores */
+#endif /* _RTE_ */
 #endif /* SI_MAXCORES */
 
 #define	SI_MAXBR		4		/* Max bridges (this is arbitrary, for software
@@ -102,7 +114,7 @@
 #define	SI_ARMCA7_ROM		0x00000000	/* ARM Cortex-A7 ROM */
 #ifndef SI_ARMCA7_RAM
 #define	SI_ARMCA7_RAM		0x00200000	/* ARM Cortex-A7 RAM */
-#endif // endif
+#endif
 #define	SI_ARM_FLASH1		0xffff0000	/* ARM Flash Region 1 */
 #define	SI_ARM_FLASH1_SZ	0x00010000	/* ARM Size of Flash Region 1 */
 
@@ -117,31 +129,14 @@
 						 * (2 ZettaBytes), high 32 bits
 						 */
 
-#define SI_BCM53573_NANDFLASH	0x30000000	/* 53573 NAND flash base */
-#define SI_BCM53573_NORFLASH	0x1c000000	/* 53573 NOR flash base */
-#define SI_BCM53573_FLASH2_SZ	0x04000000	/* 53573 NOR flash2 size */
-
-#define	SI_BCM53573_NORFLASH_WINDOW	0x01000000	/* only support 16M direct access for
-							 * 3-byte address modes in spi flash
-							 */
-#define	SI_BCM53573_BOOTDEV_MASK	0x3
-#define	SI_BCM53573_BOOTDEV_NOR		0x0
-
-#define SI_BCM53573_NAND_PRE_MASK	0x100	/* 53573 NAND present mask */
-
-#define	SI_BCM53573_DDRTYPE_MASK	0x10
-#define	SI_BCM53573_DDRTYPE_DDR3	0x10
-
-#define	SI_BCM47189_RGMII_VDD_MASK	0x3
-#define	SI_BCM47189_RGMII_VDD_SHIFT	21
-#define	SI_BCM47189_RGMII_VDD_3_3V	0
-#define	SI_BCM47189_RGMII_VDD_2_5V	1
-#define	SI_BCM47189_RGMII_VDD_1_5V	1
-
-#define	SI_BCM53573_LOCKED_CPUPLL	0x1
-
 /* APB bridge code */
 #define	APB_BRIDGE_ID		0x135		/* APB Bridge 0, 1, etc. */
+
+/* ADB bridge code */
+#define ADB_BRIDGE_ID		0x031
+
+/* AXI-AHB bridge code */
+#define	AXI2AHB_BRIDGE_ID		0x240		/* AXI_AHB Bridge */
 
 /* core codes */
 #define	NODEV_CORE_ID		0x700		/* Invalid coreid */
@@ -212,11 +207,16 @@
 #define ARMCA7_CORE_ID		0x847		/* ARM CA7 CPU */
 #define SYSMEM_CORE_ID		0x849		/* System memory core */
 #define HUB_CORE_ID		0x84b           /* Hub core ID */
-#define HND_OOBR_CORE_ID        0x85c           /* Hnd oob router core ID */
+#define HWA_CORE_ID		0x851		/* HWA Core ID */
+#define SPMI_SLAVE_CORE_ID	0x855		/* SPMI Slave Core ID */
+#define BT_CORE_ID		0x857		/* Bluetooth Core ID */
+#define HND_OOBR_CORE_ID	0x85c		/* Hnd oob router core ID */
+#define SOE_CORE_ID		0x85d		/* SOE core */
 #define APB_BRIDGE_CORE_ID	0x135		/* APB bridge core ID */
 #define AXI_CORE_ID		0x301		/* AXI/GPV core ID */
 #define EROM_CORE_ID		0x366		/* EROM core ID */
 #define OOB_ROUTER_CORE_ID	0x367		/* OOB router core ID */
+#define CCI400_CORE_ID		0x420		/* CCI-400 (Cache Coherent Interconnect) core ID */
 #define DEF_AI_COMP		0xfff		/* Default component, in ai chips it maps all
 						 * unused address ranges
 						 */
@@ -239,9 +239,9 @@
 #define ALTA_CORE_ID		0x534		/* I2S core */
 #define DDR23_PHY_CORE_ID	0x5dd
 
-#define SI_PCI1_MEM     0x40000000  /* Host Mode sb2pcitranslation0 (64 MB) */
-#define SI_PCI1_CFG     0x44000000  /* Host Mode sb2pcitranslation1 (64 MB) */
-#define SI_PCIE1_DMA_H32		0xc0000000	/* PCIE Client Mode sb2pcitranslation2
+#define SI_PCI1_MEM		0x40000000	/* Host Mode sb2pcitranslation0 (64 MB) */
+#define SI_PCI1_CFG		0x44000000	/* Host Mode sb2pcitranslation1 (64 MB) */
+#define SI_PCIE1_DMA_H32	0xc0000000	/* PCIE Client Mode sb2pcitranslation2
 						 * (2 ZettaBytes), high 32 bits
 						 */
 #define NS_PCIEG2_CORE_REV_B0	0x7		/* NS-B0 PCIE Gen 2 core rev */
@@ -251,16 +251,18 @@
  */
 #define	SI_CC_IDX		0
 /* SOC Interconnect types (aka chip types) */
-#define	SOCI_SB			0
-#define	SOCI_AI			1
-#define	SOCI_UBUS		2
-#define	SOCI_NAI		3
-#define SOCI_DVTBUS		4 /* BCM7XXX Digital Video Tech bus */
+#define	SOCI_SB			0u
+#define	SOCI_AI			1u
+#define	SOCI_UBUS		2u
+#define	SOCI_NAI		3u
+#define SOCI_DVTBUS		4u /* BCM7XXX Digital Video Tech bus */
+#define SOCI_NCI		6u /* NCI (non coherent interconnect) i.e. BOOKER */
 
 /* Common core control flags */
 #define	SICF_BIST_EN		0x8000
 #define	SICF_PME_EN		0x4000
 #define	SICF_CORE_BITS		0x3ffc
+#define	SICF_PCEN		0x0004
 #define	SICF_FGC		0x0002
 #define	SICF_CLOCK_EN		0x0001
 
@@ -270,6 +272,7 @@
 #define	SISF_GATED_CLK		0x2000
 #define	SISF_DMA64		0x1000
 #define	SISF_CORE_BITS		0x0fff
+#define	SISF_CORE_BITS_SCAN	0x0010		/* SCAN core */
 
 /* Norstar core status flags */
 #define SISF_NS_BOOTDEV_MASK	0x0003	/* ROM core */

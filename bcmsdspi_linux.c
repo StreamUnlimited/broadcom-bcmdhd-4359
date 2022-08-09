@@ -1,7 +1,7 @@
 /*
  * Broadcom SPI Host Controller Driver - Linux Per-port
  *
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -17,14 +17,10 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
- *
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: bcmsdspi_linux.c 514727 2014-11-12 03:02:48Z $
+ * $Id$
  */
 
 #include <typedefs.h>
@@ -51,7 +47,7 @@ module_param(sd_crc, uint, 0);
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 0))
 #define KERNEL26
-#endif // endif
+#endif
 #endif /* !BCMSPI_ANDROID */
 
 struct sdos_info {
@@ -66,15 +62,15 @@ struct sdos_info {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 0))
 #define BLOCKABLE()	(!in_atomic())
 #else
-#define BLOCKABLE()	(!in_interrupt())
-#endif // endif
+#define BLOCKABLE()	(!in_interrupt()) /* XXX Doesn't handle CONFIG_PREEMPT? */
+#endif
 
 /* Interrupt handler */
 static irqreturn_t
 sdspi_isr(int irq, void *dev_id
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
 , struct pt_regs *ptregs
-#endif // endif
+#endif
 )
 {
 	sdioh_info_t *sd;
@@ -335,7 +331,7 @@ void spi_waitbits(sdioh_info_t *sd, bool yield)
 {
 #ifndef BCMSDYIELD
 	ASSERT(!yield);
-#endif // endif
+#endif
 	sd_trace(("%s: yield %d canblock %d\n",
 	          __FUNCTION__, yield, BLOCKABLE()));
 
@@ -396,15 +392,15 @@ spi_sendrecv(sdioh_info_t *sd, uint8 *msg_out, uint8 *msg_in, int msglen)
 
 	if (sd->wordlen == 2)
 #if !(defined(SPI_PIO_RW_BIGENDIAN) && defined(SPI_PIO_32BIT_RW))
-		write = msg_out[2] & 0x80;
+		write = msg_out[2] & 0x80;	/* XXX bit 7: read:0, write :1 */
 #else
-		write = msg_out[1] & 0x80;
+		write = msg_out[1] & 0x80;	/* XXX bit 7: read:0, write :1 */
 #endif /* !(defined(SPI_PIO_RW_BIGENDIAN) && defined(SPI_PIO_32BIT_RW)) */
 	if (sd->wordlen == 4)
 #if !(defined(SPI_PIO_RW_BIGENDIAN) && defined(SPI_PIO_32BIT_RW))
-		write = msg_out[0] & 0x80;
+		write = msg_out[0] & 0x80;	/* XXX bit 7: read:0, write :1 */
 #else
-		write = msg_out[3] & 0x80;
+		write = msg_out[3] & 0x80;	/* XXX bit 7: read:0, write :1 */
 #endif /* !(defined(SPI_PIO_RW_BIGENDIAN) && defined(SPI_PIO_32BIT_RW)) */
 
 	if (bcmgspi_dump) {

@@ -7,19 +7,19 @@
 #define AGENL_ERROR(name, arg1, args...) \
 	do { \
 		if (android_msg_level & ANDROID_ERROR_LEVEL) { \
-			printk(KERN_ERR DHD_LOG_PREFIX "[%s] AGENL-ERROR) %s : " arg1, name, __func__, ## args); \
+			printf("[%s] AGENL-ERROR) %s : " arg1, name, __func__, ## args); \
 		} \
 	} while (0)
 #define AGENL_TRACE(name, arg1, args...) \
 	do { \
 		if (android_msg_level & ANDROID_TRACE_LEVEL) { \
-			printk(KERN_INFO DHD_LOG_PREFIX "[%s] AGENL-TRACE) %s : " arg1, name, __func__, ## args); \
+			printf("[%s] AGENL-TRACE) %s : " arg1, name, __func__, ## args); \
 		} \
 	} while (0)
 #define AGENL_INFO(name, arg1, args...) \
 	do { \
 		if (android_msg_level & ANDROID_INFO_LEVEL) { \
-			printk(KERN_INFO DHD_LOG_PREFIX "[%s] AGENL-INFO) %s : " arg1, name, __func__, ## args); \
+			printf("[%s] AGENL-INFO) %s : " arg1, name, __func__, ## args); \
 		} \
 	} while (0)
 
@@ -221,10 +221,11 @@ wl_ext_set_probreq(struct net_device *dev, bool set)
 	return 0;
 }
 
-static int
-wl_ext_probreq_event(struct net_device *dev, struct genl_params *zconf,
-	wl_event_msg_t *e, void* data)
+void
+wl_ext_probreq_event(struct net_device *dev, void *argu,
+	const wl_event_msg_t *e, void *data)
 {
+	struct genl_params *zconf = (struct genl_params *)argu;
 	int i, ret = 0, num_ie = 0, totlen;
 	uint32 event_len = 0;
 	char *buf, *pbuf;
@@ -239,7 +240,7 @@ wl_ext_probreq_event(struct net_device *dev, struct genl_params *zconf,
 	buf = kzalloc(MAX_CUSTOM_PKT_LENGTH, GFP_KERNEL);
 	if (unlikely(!buf)) {
 		AGENL_ERROR(dev->name, "Could not allocate buf\n");
-		return -ENOMEM;
+		return;
 	}
 
 	// copy mgmt header
@@ -303,7 +304,7 @@ wl_ext_probreq_event(struct net_device *dev, struct genl_params *zconf,
 
 	if(buf)
 		kfree(buf);
-	return ret;
+	return;
 }
 #endif
 
@@ -418,7 +419,7 @@ wl_ext_genl_send(struct genl_params *zconf, struct net_device *dev,
 
 	zconf->send_retry_cnt = 0;
 
-	return 0;	
+	return 0;
 }
 
 static int
@@ -565,4 +566,3 @@ wl_ext_genl_deinit(struct net_device *net)
 
 }
 #endif
-

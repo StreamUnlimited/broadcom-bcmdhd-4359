@@ -1,7 +1,7 @@
 /*
  * SROM format definition.
  *
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -17,20 +17,14 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
  *
- *
- * <<Broadcom-WL-IPTag/Open:>>
- *
- * $Id: bcmsrom_fmt.h 688657 2017-03-07 10:12:56Z $
+ * <<Broadcom-WL-IPTag/Dual:>>
  */
 
 #ifndef	_bcmsrom_fmt_h_
 #define	_bcmsrom_fmt_h_
 
-#define SROM_MAXREV		16	/* max revision supported by driver */
+#define SROM_MAXREV		18	/* max revision supported by driver */
 
 /* Maximum srom: 16 Kilobits == 2048 bytes */
 
@@ -40,12 +34,21 @@
 #ifdef LARGE_NVRAM_MAXSZ
 #define VARS_MAX		LARGE_NVRAM_MAXSZ
 #else
+#if defined(BCMROMBUILD) || defined(DONGLEBUILD)
+#define VARS_MAX		4096
+#else
 #define LARGE_NVRAM_MAXSZ	8192
 #define VARS_MAX		LARGE_NVRAM_MAXSZ
+#endif /* BCMROMBUILD || DONGLEBUILD */
 #endif /* LARGE_NVRAM_MAXSZ */
 
 /* PCI fields */
 #define PCI_F0DEVID		48
+
+/* SROM Rev 2: 1 Kilobit map for 11a/b/g devices.
+ * SROM Rev 3: Upward compatible modification for lpphy and PCIe
+ * hardware workaround.
+ */
 
 #define	SROM_WORDS		64
 #define SROM_SIGN_MINWORDS 128
@@ -954,13 +957,14 @@
 
 #define SROM16_SIGN			128
 #define SROM16_WORDS			1024
+#define SROM16_SFLASH_WORDS		2048U
 #define SROM16_SIGNATURE		0x4357
 #define SROM16_CRCREV			1023
-#define SROM16_MACHI			129
-#define SROM16_CALDATA_OFFSET_LOC	132
-#define SROM16_BOARDREV		133
-#define SROM16_CCODE			134
-#define SROM16_REGREV			135
+#define SROM16_MACHI			(SROM16_SIGN + 1)
+#define SROM16_CALDATA_OFFSET_LOC	(SROM16_SIGN + 4)
+#define SROM16_BOARDREV			(SROM16_SIGN + 5)
+#define SROM16_CCODE			(SROM16_SIGN + 6)
+#define SROM16_REGREV			(SROM16_SIGN + 7)
 
 #define SROM_CALDATA_WORDS		832
 
@@ -1001,6 +1005,17 @@
 #define SROM17_CRCREV		255
 #define SROM17_CALDATA_WORDS	161
 #define SROM17_SIGNATURE	0x1103	/* 4355 in hex format */
+
+#define SROM18_SIGN			112
+#define SROM18_WORDS			1024
+#define SROM18_SIGNATURE		0x4377
+#define SROM18_CRCREV			1023
+#define SROM18_MACHI			(SROM18_SIGN + 1)
+#define SROM18_CALDATA_OFFSET_LOC	(SROM18_SIGN + 4)
+#define SROM18_BOARDREV			(SROM18_SIGN + 5)
+#define SROM18_CCODE			(SROM18_SIGN + 6)
+#define SROM18_REGREV			(SROM18_SIGN + 7)
+#define SROM18_CALDATA_WORDS		(SROM18_WORDS - SROM18_CALDATA_OFFSET_LOC)
 
 typedef struct {
 	uint8 tssipos;		/* TSSI positive slope, 1: positive, 0: negative */

@@ -1,7 +1,7 @@
 /*
  * Fundamental types and constants relating to WPA
  *
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -17,14 +17,8 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
  *
- *
- * <<Broadcom-WL-IPTag/Open:>>
- *
- * $Id: wpa.h 822438 2019-05-29 17:13:44Z $
+ * <<Broadcom-WL-IPTag/Dual:>>
  */
 
 #ifndef _proto_wpa_h_
@@ -135,7 +129,7 @@ typedef BWL_PRE_PACKED_STRUCT struct
 
 #define WPA_CIPHER_AES_GCM	8	/* AES (GCM) */
 #define WPA_CIPHER_AES_GCM256	9	/* AES (GCM256) */
-#define WPA_CIPHER_CCMP_256 	10	/* CCMP-256 */
+#define WPA_CIPHER_CCMP_256	10	/* CCMP-256 */
 #define WPA_CIPHER_BIP_GMAC_128	11	/* BIP_GMAC_128 */
 #define WPA_CIPHER_BIP_GMAC_256 12	/* BIP_GMAC_256 */
 #define WPA_CIPHER_BIP_CMAC_256 13	/* BIP_CMAC_256 */
@@ -159,9 +153,9 @@ typedef BWL_PRE_PACKED_STRUCT struct
 				 (cipher) == WPA_CIPHER_TPK)
 
 #define IS_WPA_BIP_CIPHER(cipher)  ((cipher) == WPA_CIPHER_BIP || \
-			            (cipher) == WPA_CIPHER_BIP_GMAC_128 || \
+				    (cipher) == WPA_CIPHER_BIP_GMAC_128 || \
 				    (cipher) == WPA_CIPHER_BIP_GMAC_256 || \
-		                    (cipher) == WPA_CIPHER_BIP_CMAC_256)
+				    (cipher) == WPA_CIPHER_BIP_CMAC_256)
 
 #ifdef BCMWAPI_WAI
 #define IS_WAPI_CIPHER(cipher)	((cipher) == WAPI_CIPHER_NONE || \
@@ -229,6 +223,7 @@ typedef BWL_PRE_PACKED_STRUCT struct
 #define RSN_CAP_MFPC			0x0080
 #define RSN_CAP_SPPC			0x0400
 #define RSN_CAP_SPPR			0x0800
+#define RSN_CAP_OCVC			0x4000
 
 /* WPA capabilities defined in 802.11i */
 #define WPA_CAP_4_REPLAY_CNTRS		RSN_CAP_4_REPLAY_CNTRS
@@ -241,7 +236,7 @@ typedef BWL_PRE_PACKED_STRUCT struct
 
 /* WPA Specific defines */
 #define WPA_CAP_LEN	RSN_CAP_LEN	/* Length of RSN capabilities in RSN IE (2 octets) */
-#define WPA_PMKID_CNT_LEN	2 	/* Length of RSN PMKID count (2 octests) */
+#define WPA_PMKID_CNT_LEN	2	/* Length of RSN PMKID count (2 octests) */
 
 #define	WPA_CAP_WPA2_PREAUTH		RSN_CAP_PREAUTH
 

@@ -1,7 +1,7 @@
 /*
  * Header file for DHD daemon to handle timeouts
  *
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -17,19 +17,14 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
  *
- *
- * <<Broadcom-WL-IPTag/Open:>>
- *
- * $Id: dhd_daemon.h 802947 2019-02-05 14:53:08Z $
+ * <<Broadcom-WL-IPTag/Dual:>>
  */
 
 #ifndef __BCM_DHDD_H__
 #define __BCM_DHDD_H__
 
+#include <brcm_nl80211.h>
 /**
  * To maintain compatabily when dhd driver and dhd daemon is taken from different branches,
  * make sure to keep this file same across dhd driver branch and dhd apps branch.
@@ -39,12 +34,6 @@
 #define BCM_TO_MAGIC 0x600DB055
 #define NO_TRAP 0
 #define DO_TRAP	1
-
-/* Keep common BCM netlink macros here */
-#define BCM_NL_USER	31
-#define BCM_NL_OXYGEN	30
-#define BCM_NL_TS	29
-/* ====== !! ADD NEW NL socket related defines here !! ====== */
 
 typedef enum notify_dhd_daemon_reason {
 	REASON_COMMAND_TO,

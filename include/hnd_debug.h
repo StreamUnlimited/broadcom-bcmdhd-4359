@@ -1,7 +1,7 @@
 /*
  * HND Run Time Environment debug info area
  *
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -17,28 +17,26 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
  *
- *
- * <<Broadcom-WL-IPTag/Open:>>
- *
- * $Id: hnd_debug.h 726313 2017-10-12 06:07:22Z $
+ * <<Broadcom-WL-IPTag/Dual:>>
  */
 
 #ifndef	_HND_DEBUG_H
 #define	_HND_DEBUG_H
 
 /* Magic number at a magic location to find HND_DEBUG pointers */
-#define HND_DEBUG_PTR_PTR_MAGIC 0x50504244  	/* DBPP */
-
-/* Magic number at a magic location to find RAM size */
-#define HND_RAMSIZE_PTR_MAGIC	0x534d4152	/* RAMS */
+#define HND_DEBUG_PTR_PTR_MAGIC 0x50504244u	/* DBPP */
 
 #ifndef _LANGUAGE_ASSEMBLY
 
+#include <typedefs.h>
+
 /* Includes only when building dongle code */
+#ifdef _RTE_
+#include <event_log.h>
+#include <hnd_trap.h>
+#include <hnd_cons.h>
+#endif
 
 /* We use explicit sizes here since this gets included from different
  * systems.  The sizes must be the size of the creating system
@@ -47,12 +45,60 @@
 
 #ifdef FWID
 extern uint32 gFWID;
-#endif // endif
+#endif
 
+enum hnd_debug_reloc_entry_type {
+	HND_DEBUG_RELOC_ENTRY_TYPE_ROM		= 0u,
+	HND_DEBUG_RELOC_ENTRY_TYPE_RAM		= 1u,
+	HND_DEBUG_RELOC_ENTRY_TYPE_MTH_STACK	= 2u, /* main thread stack */
+};
+typedef uint32 hnd_debug_reloc_entry_type_t;
+
+typedef struct hnd_debug_reloc_entry {
+	/* Identifies the type(hnd_debug_reloc_entry_type) of the data */
+	hnd_debug_reloc_entry_type_t type;
+	uint32 phys_addr;		/* Physical address */
+	uint32 virt_addr;		/* Virtual address */
+	uint32 size;			/* Specifies the size of the segment */
+} hnd_debug_reloc_entry_t;
+
+#ifdef _RTE_
+/* Define pointers for normal ARM use */
+#define _HD_EVLOG_P		event_log_top_t *
+#define _HD_CONS_P		hnd_cons_t *
+#define _HD_TRAP_P		trap_t *
+#define _HD_DEBUG_RELOC_ENTRY_P	hnd_debug_reloc_entry_t *
+#define _HD_DEBUG_RELOC_P	hnd_debug_reloc_t *
+
+#else
 /* Define pointers for use on other systems */
-#define _HD_EVLOG_P	uint32
-#define _HD_CONS_P	uint32
-#define _HD_TRAP_P	uint32
+#define _HD_EVLOG_P		uint32
+#define _HD_CONS_P		uint32
+#define _HD_TRAP_P		uint32
+#define _HD_DEBUG_RELOC_ENTRY_P	uint32
+#define _HD_DEBUG_RELOC_P	uint32
+
+#endif /* _RTE_ */
+
+/* MMU relocation info in the debug area */
+typedef struct hnd_debug_reloc {
+	_HD_DEBUG_RELOC_ENTRY_P hnd_reloc_ptr;	/* contains the pointer to the MMU reloc table */
+	uint32 hnd_reloc_ptr_size;		/* Specifies the size of the MMU reloc table */
+} hnd_debug_reloc_t;
+
+/* Number of MMU relocation entries supported in v2 */
+#define RELOC_NUM_ENTRIES		4u
+
+/* Total MMU relocation table size for v2 */
+#define HND_DEBUG_RELOC_PTR_SIZE	(RELOC_NUM_ENTRIES * sizeof(hnd_debug_reloc_entry_t))
+
+#define HND_DEBUG_VERSION_1	1u	/* Legacy, version 1 */
+#define HND_DEBUG_VERSION_2	2u	/* Version 2 contains the MMU information
+					 * used for stack virtualization, etc.
+					 */
+
+/* Legacy debug version for older branches. */
+#define HND_DEBUG_VERSION	HND_DEBUG_VERSION_1
 
 /* This struct is placed at a well-defined location, and contains a pointer to hnd_debug. */
 typedef struct hnd_debug_ptr {
@@ -67,30 +113,40 @@ typedef struct hnd_debug_ptr {
 	uint32	ram_base_addr;
 
 } hnd_debug_ptr_t;
+extern hnd_debug_ptr_t debug_info_ptr;
 
-/* This struct is placed at a well-defined location. */
-typedef struct hnd_ramsize_ptr {
-	uint32	magic;			/* 'RAMS' */
+#define  HND_DEBUG_EPIVERS_MAX_STR_LEN		32u
 
-	/* RAM size information. */
-	uint32	ram_size;
-} hnd_ramsize_ptr_t;
+/* chip id string is 8 bytes long with null terminator. Example 43452a3 */
+#define  HND_DEBUG_BUILD_SIGNATURE_CHIPID_LEN	13u
 
-#define  HND_DEBUG_EPIVERS_MAX_STR_LEN	32
-#define  HND_DEBUG_BUILD_SIGNATURE_FWID_LEN	17
-#define  HND_DEBUG_BUILD_SIGNATURE_VER_LEN	22
+#define  HND_DEBUG_BUILD_SIGNATURE_FWID_LEN	17u
+
+/* ver=abc.abc.abc.abcdefgh size = 24bytes. 6 bytes extra for expansion */
+#define  HND_DEBUG_BUILD_SIGNATURE_VER_LEN	30u
+
 typedef struct hnd_debug {
 	uint32	magic;
-#define HND_DEBUG_MAGIC 0x47424544	/* 'DEBG' */
+#define HND_DEBUG_MAGIC 0x47424544u	/* 'DEBG' */
 
-	uint32	version;		/* Debug struct version */
-#define HND_DEBUG_VERSION 1
+#ifndef HND_DEBUG_USE_V2
+	uint32	version;		/* Legacy, debug struct version */
+#else
+	/* Note: The original uint32 version is split into two fields:
+	 * uint16 version and uint16 length to accomidate future expansion
+	 * of the strucutre.
+	 *
+	 * The length field is not populated for the version 1 of the structure.
+	 */
+	uint16	version;		/* Debug struct version */
+	uint16	length;			/* Size of the whole structure in bytes */
+#endif /* HND_DEBUG_USE_V2 */
 
 	uint32	fwid;			/* 4 bytes of fw info */
 	char	epivers[HND_DEBUG_EPIVERS_MAX_STR_LEN];
 
-	_HD_TRAP_P trap_ptr;		/* trap_t data struct */
-	_HD_CONS_P console;		/* Console  */
+	_HD_TRAP_P PHYS_ADDR_N(trap_ptr);	/* trap_t data struct physical address. */
+	_HD_CONS_P PHYS_ADDR_N(console);	/* Console physical address. */
 
 	uint32	ram_base;
 	uint32	ram_size;
@@ -98,15 +154,42 @@ typedef struct hnd_debug {
 	uint32	rom_base;
 	uint32	rom_size;
 
-	_HD_EVLOG_P event_log_top;
+	_HD_EVLOG_P event_log_top;	/* EVENT_LOG address. */
 
 	/* To populated fields below,
 	 * INCLUDE_BUILD_SIGNATURE_IN_SOCRAM needs to be enabled
 	 */
 	char fwid_signature[HND_DEBUG_BUILD_SIGNATURE_FWID_LEN]; /* fwid=<FWID> */
-	char ver_signature[HND_DEBUG_BUILD_SIGNATURE_VER_LEN]; /* ver=abc.abc.abc.abc */
+	/* ver=abc.abc.abc.abcdefgh size = 24bytes. 6 bytes extra for expansion */
+	char ver_signature[HND_DEBUG_BUILD_SIGNATURE_VER_LEN];
+	char chipid_signature[HND_DEBUG_BUILD_SIGNATURE_CHIPID_LEN]; /* chip=12345a3 */
 
+#ifdef HND_DEBUG_USE_V2
+	/* Version 2 fields */
+	/* Specifies the hnd debug MMU info */
+	_HD_DEBUG_RELOC_P	hnd_debug_reloc_ptr;
+#endif /* HND_DEBUG_USE_V2 */
 } hnd_debug_t;
+
+#ifdef HND_DEBUG_USE_V2
+#define HND_DEBUG_V1_SIZE       (OFFSETOF(hnd_debug_t, chipid_signature) + \
+				 sizeof(((hnd_debug_t *)0)->chipid_signature))
+
+#define HND_DEBUG_V2_BASE_SIZE  (OFFSETOF(hnd_debug_t, hnd_debug_reloc_ptr) + \
+				 sizeof(((hnd_debug_t *)0)->hnd_debug_reloc_ptr))
+#endif /* HND_DEBUG_USE_V2 */
+
+/* The following structure is used in populating build information */
+typedef struct hnd_build_info {
+	uint8 version; /* Same as HND_DEBUG_VERSION */
+	uint8 rsvd[3]; /* Reserved fields for padding purposes */
+	/* To populated fields below,
+	 * INCLUDE_BUILD_SIGNATURE_IN_SOCRAM needs to be enabled
+	 */
+	uint32 fwid;
+	uint32 ver[4];
+	char chipid_signature[HND_DEBUG_BUILD_SIGNATURE_CHIPID_LEN]; /* chip=12345a3 */
+} hnd_build_info_t;
 
 /*
  * timeval_t and prstatus_t are copies of the Linux structures.
@@ -157,11 +240,10 @@ typedef struct prstatus {
 		DUMP_INFO_PTR_PTR_5,					\
 		DUMP_INFO_PTR_PTR_END
 
-/* for DHD driver to get dongle ram size info. */
-#define RAMSIZE_PTR_PTR_0	0x6c
-#define RAMSIZE_PTR_PTR_END	0xffffffff
-#define RAMSIZE_PTR_PTR_LIST	RAMSIZE_PTR_PTR_0, \
-				RAMSIZE_PTR_PTR_END
+extern bool hnd_debug_info_in_trap_context(void);
+
+/* Get build information. */
+extern int hnd_build_info_get(void *ctx, void *arg2, uint32 *buf, uint16 *len);
 
 #endif /* !LANGUAGE_ASSEMBLY */
 

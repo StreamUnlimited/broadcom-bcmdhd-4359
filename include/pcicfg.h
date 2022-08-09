@@ -1,7 +1,7 @@
 /*
  * pcicfg.h: PCI configuration constants and structures.
  *
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -17,18 +17,122 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
  *
- *
- * <<Broadcom-WL-IPTag/Open:>>
- *
- * $Id: pcicfg.h 795237 2018-12-18 03:26:49Z $
+ * <<Broadcom-WL-IPTag/Dual:>>
  */
 
 #ifndef	_h_pcicfg_
 #define	_h_pcicfg_
+
+/* The following inside ifndef's so we don't collide with NTDDK.H */
+#ifndef PCI_MAX_BUS
+#define PCI_MAX_BUS		0x100
+#endif
+#ifndef PCI_MAX_DEVICES
+#define PCI_MAX_DEVICES		0x20
+#endif
+#ifndef PCI_MAX_FUNCTION
+#define PCI_MAX_FUNCTION	0x8
+#endif
+
+#ifndef PCI_INVALID_VENDORID
+#define PCI_INVALID_VENDORID	0xffff
+#endif
+#ifndef PCI_INVALID_DEVICEID
+#define PCI_INVALID_DEVICEID	0xffff
+#endif
+
+/* Convert between bus-slot-function-register and config addresses */
+
+#define	PCICFG_BUS_SHIFT	16	/* Bus shift */
+#define	PCICFG_SLOT_SHIFT	11	/* Slot shift */
+#define	PCICFG_FUN_SHIFT	8	/* Function shift */
+#define	PCICFG_OFF_SHIFT	0	/* Register shift */
+
+#define	PCICFG_BUS_MASK		0xff	/* Bus mask */
+#define	PCICFG_SLOT_MASK	0x1f	/* Slot mask */
+#define	PCICFG_FUN_MASK		7	/* Function mask */
+#define	PCICFG_OFF_MASK		0xff	/* Bus mask */
+
+#define	PCI_CONFIG_ADDR(b, s, f, o)					\
+		((((b) & PCICFG_BUS_MASK) << PCICFG_BUS_SHIFT)		\
+		 | (((s) & PCICFG_SLOT_MASK) << PCICFG_SLOT_SHIFT)	\
+		 | (((f) & PCICFG_FUN_MASK) << PCICFG_FUN_SHIFT)	\
+		 | (((o) & PCICFG_OFF_MASK) << PCICFG_OFF_SHIFT))
+
+#define	PCI_CONFIG_BUS(a)	(((a) >> PCICFG_BUS_SHIFT) & PCICFG_BUS_MASK)
+#define	PCI_CONFIG_SLOT(a)	(((a) >> PCICFG_SLOT_SHIFT) & PCICFG_SLOT_MASK)
+#define	PCI_CONFIG_FUN(a)	(((a) >> PCICFG_FUN_SHIFT) & PCICFG_FUN_MASK)
+#define	PCI_CONFIG_OFF(a)	(((a) >> PCICFG_OFF_SHIFT) & PCICFG_OFF_MASK)
+
+/* PCIE Config space accessing MACROS */
+
+#define	PCIECFG_BUS_SHIFT	24	/* Bus shift */
+#define	PCIECFG_SLOT_SHIFT	19	/* Slot/Device shift */
+#define	PCIECFG_FUN_SHIFT	16	/* Function shift */
+#define	PCIECFG_OFF_SHIFT	0	/* Register shift */
+
+#define	PCIECFG_BUS_MASK	0xff	/* Bus mask */
+#define	PCIECFG_SLOT_MASK	0x1f	/* Slot/Device mask */
+#define	PCIECFG_FUN_MASK	7	/* Function mask */
+#define	PCIECFG_OFF_MASK	0xfff	/* Register mask */
+
+#define	PCIE_CONFIG_ADDR(b, s, f, o)					\
+		((((b) & PCIECFG_BUS_MASK) << PCIECFG_BUS_SHIFT)		\
+		 | (((s) & PCIECFG_SLOT_MASK) << PCIECFG_SLOT_SHIFT)	\
+		 | (((f) & PCIECFG_FUN_MASK) << PCIECFG_FUN_SHIFT)	\
+		 | (((o) & PCIECFG_OFF_MASK) << PCIECFG_OFF_SHIFT))
+
+#define	PCIE_CONFIG_BUS(a)	(((a) >> PCIECFG_BUS_SHIFT) & PCIECFG_BUS_MASK)
+#define	PCIE_CONFIG_SLOT(a)	(((a) >> PCIECFG_SLOT_SHIFT) & PCIECFG_SLOT_MASK)
+#define	PCIE_CONFIG_FUN(a)	(((a) >> PCIECFG_FUN_SHIFT) & PCIECFG_FUN_MASK)
+#define	PCIE_CONFIG_OFF(a)	(((a) >> PCIECFG_OFF_SHIFT) & PCIECFG_OFF_MASK)
+
+/* The actual config space */
+
+#define	PCI_BAR_MAX		6
+
+#define	PCI_ROM_BAR		8
+
+#define	PCR_RSVDA_MAX		2
+
+/* Bits in PCI bars' flags */
+
+#define	PCIBAR_FLAGS		0xf
+#define	PCIBAR_IO		0x1
+#define	PCIBAR_MEM1M		0x2
+#define	PCIBAR_MEM64		0x4
+#define	PCIBAR_PREFETCH		0x8
+#define	PCIBAR_MEM32_MASK	0xFFFFFF80
+
+typedef struct _pci_config_regs {
+	uint16	vendor;
+	uint16	device;
+	uint16	command;
+	uint16	status;
+	uint8	rev_id;
+	uint8	prog_if;
+	uint8	sub_class;
+	uint8	base_class;
+	uint8	cache_line_size;
+	uint8	latency_timer;
+	uint8	header_type;
+	uint8	bist;
+	uint32	base[PCI_BAR_MAX];
+	uint32	cardbus_cis;
+	uint16	subsys_vendor;
+	uint16	subsys_id;
+	uint32	baserom;
+	uint32	rsvd_a[PCR_RSVDA_MAX];
+	uint8	int_line;
+	uint8	int_pin;
+	uint8	min_gnt;
+	uint8	max_lat;
+	uint8	dev_dep[192];
+} pci_config_regs;
+
+#define	SZPCR		(sizeof (pci_config_regs))
+#define	MINSZPCR	64		/* offsetof (dev_dep[0] */
 
 /* pci config status reg has a bit to indicate that capability ptr is present */
 
@@ -51,16 +155,8 @@
 #define	PCI_CFG_HDR		0xe
 #define	PCI_CFG_BIST		0xf
 #define	PCI_CFG_BAR0		0x10
-/*
-* TODO: PCI_CFG_BAR1 is wrongly defined to be 0x14 whereas it should be
-* 0x18 as per the PCIe full dongle spec. Need to modify the values below
-* correctly at a later point of time
-*/
-#define	PCI_CFG_BAR1		0x14
-#define	PCI_CFG_BAR2		0x18
-#define	PCI_CFG_BAR3		0x1c
-#define	PCI_CFG_BAR4		0x20
-#define	PCI_CFG_BAR5		0x24
+#define	PCI_CFG_BAR1		0x18
+#define	PCI_CFG_BAR2		0x20
 #define	PCI_CFG_CIS		0x28
 #define	PCI_CFG_SVID		0x2c
 #define	PCI_CFG_SSID		0x2e
@@ -72,6 +168,228 @@
 #define	PCI_CFG_MAXLAT		0x3f
 #define	PCI_CFG_DEVCTRL		0xd8
 #define PCI_CFG_TLCNTRL_5	0x814
+#define PCI_CFG_ERRATTN_MASK_FN0	0x8a0
+#define PCI_CFG_ERRATTN_STATUS_FN0	0x8a4
+#define PCI_CFG_ERRATTN_MASK_FN1	0x8a8
+#define PCI_CFG_ERRATTN_STATUS_FN1	0x8ac
+#define PCI_CFG_ERRATTN_MASK_CMN	0x8b0
+#define PCI_CFG_ERRATTN_STATUS_CMN	0x8b4
+
+#ifdef EFI
+#undef PCI_CLASS_BRIDGE
+#undef PCI_CLASS_OLD
+#undef PCI_CLASS_DISPLAY
+#undef PCI_CLASS_SERIAL
+#undef PCI_CLASS_SATELLITE
+#endif /* EFI */
+
+/* Classes and subclasses */
+
+typedef enum {
+	PCI_CLASS_OLD = 0,
+	PCI_CLASS_DASDI,
+	PCI_CLASS_NET,
+	PCI_CLASS_DISPLAY,
+	PCI_CLASS_MMEDIA,
+	PCI_CLASS_MEMORY,
+	PCI_CLASS_BRIDGE,
+	PCI_CLASS_COMM,
+	PCI_CLASS_BASE,
+	PCI_CLASS_INPUT,
+	PCI_CLASS_DOCK,
+	PCI_CLASS_CPU,
+	PCI_CLASS_SERIAL,
+	PCI_CLASS_INTELLIGENT = 0xe,
+	PCI_CLASS_SATELLITE,
+	PCI_CLASS_CRYPT,
+	PCI_CLASS_DSP,
+	PCI_CLASS_XOR = 0xfe
+} pci_classes;
+
+typedef enum {
+	PCI_DASDI_SCSI,
+	PCI_DASDI_IDE,
+	PCI_DASDI_FLOPPY,
+	PCI_DASDI_IPI,
+	PCI_DASDI_RAID,
+	PCI_DASDI_OTHER = 0x80
+} pci_dasdi_subclasses;
+
+typedef enum {
+	PCI_NET_ETHER,
+	PCI_NET_TOKEN,
+	PCI_NET_FDDI,
+	PCI_NET_ATM,
+	PCI_NET_OTHER = 0x80
+} pci_net_subclasses;
+
+typedef enum {
+	PCI_DISPLAY_VGA,
+	PCI_DISPLAY_XGA,
+	PCI_DISPLAY_3D,
+	PCI_DISPLAY_OTHER = 0x80
+} pci_display_subclasses;
+
+typedef enum {
+	PCI_MMEDIA_VIDEO,
+	PCI_MMEDIA_AUDIO,
+	PCI_MMEDIA_PHONE,
+	PCI_MEDIA_OTHER = 0x80
+} pci_mmedia_subclasses;
+
+typedef enum {
+	PCI_MEMORY_RAM,
+	PCI_MEMORY_FLASH,
+	PCI_MEMORY_OTHER = 0x80
+} pci_memory_subclasses;
+
+typedef enum {
+	PCI_BRIDGE_HOST,
+	PCI_BRIDGE_ISA,
+	PCI_BRIDGE_EISA,
+	PCI_BRIDGE_MC,
+	PCI_BRIDGE_PCI,
+	PCI_BRIDGE_PCMCIA,
+	PCI_BRIDGE_NUBUS,
+	PCI_BRIDGE_CARDBUS,
+	PCI_BRIDGE_RACEWAY,
+	PCI_BRIDGE_OTHER = 0x80
+} pci_bridge_subclasses;
+
+typedef enum {
+	PCI_COMM_UART,
+	PCI_COMM_PARALLEL,
+	PCI_COMM_MULTIUART,
+	PCI_COMM_MODEM,
+	PCI_COMM_OTHER = 0x80
+} pci_comm_subclasses;
+
+typedef enum {
+	PCI_BASE_PIC,
+	PCI_BASE_DMA,
+	PCI_BASE_TIMER,
+	PCI_BASE_RTC,
+	PCI_BASE_PCI_HOTPLUG,
+	PCI_BASE_OTHER = 0x80
+} pci_base_subclasses;
+
+typedef enum {
+	PCI_INPUT_KBD,
+	PCI_INPUT_PEN,
+	PCI_INPUT_MOUSE,
+	PCI_INPUT_SCANNER,
+	PCI_INPUT_GAMEPORT,
+	PCI_INPUT_OTHER = 0x80
+} pci_input_subclasses;
+
+typedef enum {
+	PCI_DOCK_GENERIC,
+	PCI_DOCK_OTHER = 0x80
+} pci_dock_subclasses;
+
+typedef enum {
+	PCI_CPU_386,
+	PCI_CPU_486,
+	PCI_CPU_PENTIUM,
+	PCI_CPU_ALPHA = 0x10,
+	PCI_CPU_POWERPC = 0x20,
+	PCI_CPU_MIPS = 0x30,
+	PCI_CPU_COPROC = 0x40,
+	PCI_CPU_OTHER = 0x80
+} pci_cpu_subclasses;
+
+typedef enum {
+	PCI_SERIAL_IEEE1394,
+	PCI_SERIAL_ACCESS,
+	PCI_SERIAL_SSA,
+	PCI_SERIAL_USB,
+	PCI_SERIAL_FIBER,
+	PCI_SERIAL_SMBUS,
+	PCI_SERIAL_OTHER = 0x80
+} pci_serial_subclasses;
+
+typedef enum {
+	PCI_INTELLIGENT_I2O
+} pci_intelligent_subclasses;
+
+typedef enum {
+	PCI_SATELLITE_TV,
+	PCI_SATELLITE_AUDIO,
+	PCI_SATELLITE_VOICE,
+	PCI_SATELLITE_DATA,
+	PCI_SATELLITE_OTHER = 0x80
+} pci_satellite_subclasses;
+
+typedef enum {
+	PCI_CRYPT_NETWORK,
+	PCI_CRYPT_ENTERTAINMENT,
+	PCI_CRYPT_OTHER = 0x80
+} pci_crypt_subclasses;
+
+typedef enum {
+	PCI_DSP_DPIO,
+	PCI_DSP_OTHER = 0x80
+} pci_dsp_subclasses;
+
+typedef enum {
+	PCI_XOR_QDMA,
+	PCI_XOR_OTHER = 0x80
+} pci_xor_subclasses;
+
+/* Overlay for a PCI-to-PCI bridge */
+
+#define	PPB_RSVDA_MAX		2
+#define	PPB_RSVDD_MAX		8
+
+typedef struct _ppb_config_regs {
+	uint16	vendor;
+	uint16	device;
+	uint16	command;
+	uint16	status;
+	uint8	rev_id;
+	uint8	prog_if;
+	uint8	sub_class;
+	uint8	base_class;
+	uint8	cache_line_size;
+	uint8	latency_timer;
+	uint8	header_type;
+	uint8	bist;
+	uint32	rsvd_a[PPB_RSVDA_MAX];
+	uint8	prim_bus;
+	uint8	sec_bus;
+	uint8	sub_bus;
+	uint8	sec_lat;
+	uint8	io_base;
+	uint8	io_lim;
+	uint16	sec_status;
+	uint16	mem_base;
+	uint16	mem_lim;
+	uint16	pf_mem_base;
+	uint16	pf_mem_lim;
+	uint32	pf_mem_base_hi;
+	uint32	pf_mem_lim_hi;
+	uint16	io_base_hi;
+	uint16	io_lim_hi;
+	uint16	subsys_vendor;
+	uint16	subsys_id;
+	uint32	rsvd_b;
+	uint8	rsvd_c;
+	uint8	int_pin;
+	uint16	bridge_ctrl;
+	uint8	chip_ctrl;
+	uint8	diag_ctrl;
+	uint16	arb_ctrl;
+	uint32	rsvd_d[PPB_RSVDD_MAX];
+	uint8	dev_dep[192];
+} ppb_config_regs;
+
+/* Everything below is BRCM HND proprietary */
+
+/* Brcm PCI configuration registers */
+#define cap_list	rsvd_a[0]
+#define bar0_window	dev_dep[0x80 - 0x40]
+#define bar1_window	dev_dep[0x84 - 0x40]
+#define sprom_control	dev_dep[0x88 - 0x40]
 
 /* PCI CAPABILITY DEFINES */
 #define PCI_CAP_POWERMGMTCAP_ID		0x01
@@ -166,7 +484,7 @@ typedef struct _pcie_enhanced_caphdr {
 	uint16	next_ptr : 12;
 } pcie_enhanced_caphdr;
 
-#define PCIE_CFG_PMCSR		0x4C
+#define	PCIE_CFG_PMCSR		0x4C
 #define	PCI_BAR0_WIN		0x80	/* backplane addres space accessed by BAR0 */
 #define	PCI_BAR1_WIN		0x84	/* backplane addres space accessed by BAR1 */
 #define	PCI_SPROM_CONTROL	0x88	/* sprom property control */
@@ -238,6 +556,7 @@ typedef struct _pcie_enhanced_caphdr {
 
 #define	PCI_PHY_CTL_0			0x1800
 #define	PCI_SLOW_PMCLK_EXT_RLOCK	(1 << 7)
+#define PCI_REG_TX_DEEMPH_3_5_DB	(1 << 21)
 
 #define	PCI_LINK_STATE_DEBUG	0x1c24
 #define PCI_RECOVERY_HIST		0x1ce4
@@ -249,6 +568,9 @@ typedef struct _pcie_enhanced_caphdr {
 #define PCI_PHY_DBG_CLKREG_1	0x1e14
 #define PCI_PHY_DBG_CLKREG_2	0x1e18
 #define PCI_PHY_DBG_CLKREG_3	0x1e1c
+
+#define PCI_TL_CTRL_0                   0x800u
+#define PCI_BEACON_DIS                  (1u << 20u)       /* Disable Beacon Generation */
 
 /* Bit settings for PCIE_CFG_SUBSYSTEM_CONTROL register */
 #define PCIE_BAR1COHERENTACCEN_BIT	8
@@ -304,9 +626,11 @@ typedef struct _pcie_enhanced_caphdr {
  * Bar0WrapperBase, SecondaryBAR0Window and SecondaryBAR0WrapperBase
  * BAR0 maps 32K of register space
 */
-#define PCIE2_BAR0_WIN2		0x70 /* backplane addres space accessed by second 4KB of BAR0 */
-#define PCIE2_BAR0_CORE2_WIN	0x74 /* backplane addres space accessed by second 4KB of BAR0 */
-#define PCIE2_BAR0_CORE2_WIN2	0x78 /* backplane addres space accessed by second 4KB of BAR0 */
+#define PCIE2_BAR0_WIN2		0x70 /* config register to map 2nd 4KB of BAR0 */
+#define PCIE2_BAR0_CORE2_WIN	0x74 /* config register to map 5th 4KB of BAR0 */
+#define PCIE2_BAR0_CORE2_WIN2	0x78 /* config register to map 6th 4KB of BAR0 */
+
+/* PCIE GEN2 BAR0 window size */
 #define PCIE2_BAR0_WINSZ	0x8000
 
 #define PCI_BAR0_WIN2_OFFSET		0x1000u
@@ -316,7 +640,8 @@ typedef struct _pcie_enhanced_caphdr {
 #define PCI_SEC_BAR0_WRAP_OFFSET	0x5000u
 #define PCI_CORE_ENUM2_OFFSET		0x6000u
 #define PCI_CC_CORE_ENUM2_OFFSET	0x7000u
-#define PCI_LAST_OFFSET			0x8000u
+#define PCI_TER_BAR0_WIN_OFFSET		0x9000u
+#define PCI_TER_BAR0_WRAP_OFFSET	0xa000u
 
 #define PCI_BAR0_WINSZ		(16 * 1024)	/* bar0 window size Match with corerev 13 */
 /* On pci corerev >= 13 and all pcie, the bar0 is now 16KB and it maps: */
@@ -346,6 +671,8 @@ typedef struct _pcie_enhanced_caphdr {
 #define SPROM_BOOTROM_WE	0x20	/* external bootrom write enable */
 #define SPROM_BACKPLANE_EN	0x40	/* Enable indirect backplane access */
 #define SPROM_OTPIN_USE		0x80	/* device OTP In use */
+#define SPROM_BAR1_COHERENT_ACC_EN	0x100	/* PCIe acceeses through BAR1 are coherent */
+#define SPROM_BAR2_COHERENT_ACC_EN	0x200	/* PCIe acceeses through BAR2 are coherent */
 #define SPROM_CFG_TO_SB_RST	0x400	/* backplane reset */
 
 /* Bits in PCI command and status regs */
@@ -368,9 +695,9 @@ typedef enum {
 
 #define PCI_CONFIG_SPACE_SIZE	256
 
-#define DWORD_ALIGN(x)  (x & ~(0x03))
-#define BYTE_POS(x) (x & 0x3)
-#define WORD_POS(x) (x & 0x1)
+#define DWORD_ALIGN(x)  ((x) & ~(0x03))
+#define BYTE_POS(x) ((x) & 0x3)
+#define WORD_POS(x) ((x) & 0x1)
 
 #define BYTE_SHIFT(x)  (8 * BYTE_POS(x))
 #define WORD_SHIFT(x)  (16 * WORD_POS(x))
@@ -379,22 +706,24 @@ typedef enum {
 #define WORD_VAL(a, x) ((a >> WORD_SHIFT(x)) & 0xFFFF)
 
 #define read_pci_cfg_byte(a) \
-	(BYTE_VAL(OSL_PCI_READ_CONFIG(osh, DWORD_ALIGN(a), 4), a) & 0xff)
+	BYTE_VAL(OSL_PCI_READ_CONFIG(osh, DWORD_ALIGN(a), 4), a)
 
 #define read_pci_cfg_word(a) \
-	(WORD_VAL(OSL_PCI_READ_CONFIG(osh, DWORD_ALIGN(a), 4), a) & 0xffff)
+	WORD_VAL(OSL_PCI_READ_CONFIG(osh, DWORD_ALIGN(a), 4), a)
 
-#define write_pci_cfg_byte(a, val) do { \
-	uint32 tmpval; \
-	tmpval = (OSL_PCI_READ_CONFIG(osh, DWORD_ALIGN(a), 4) & ~0xFF << BYTE_POS(a)) | \
-	        val << BYTE_POS(a); \
-	OSL_PCI_WRITE_CONFIG(osh, DWORD_ALIGN(a), 4, tmpval); \
+#define write_pci_cfg_byte(a, val) do {				\
+	uint32 tmpval;						\
+	tmpval = OSL_PCI_READ_CONFIG(osh, DWORD_ALIGN(a), 4);	\
+	tmpval &= ~(0xFF << BYTE_SHIFT(a));			\
+	tmpval |= ((uint8)(val)) << BYTE_SHIFT(a);		\
+	OSL_PCI_WRITE_CONFIG(osh, DWORD_ALIGN(a), 4, tmpval);	\
 	} while (0)
 
 #define write_pci_cfg_word(a, val) do { \
 	uint32 tmpval; \
-	tmpval = (OSL_PCI_READ_CONFIG(osh, DWORD_ALIGN(a), 4) & ~0xFFFF << WORD_POS(a)) | \
-	        val << WORD_POS(a); \
+	tmpval = OSL_PCI_READ_CONFIG(osh, DWORD_ALIGN(a), 4);	\
+	tmpval &= ~(0xFFFF << WORD_SHIFT(a)));			\
+	tmpval |= ((uint16)(val)) << WORD_SHIFT(a);		\
 	OSL_PCI_WRITE_CONFIG(osh, DWORD_ALIGN(a), 4, tmpval); \
 	} while (0)
 

@@ -1,7 +1,7 @@
 /*
  * Fundamental constants relating to IP Protocol
  *
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -17,14 +17,8 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
  *
- *
- * <<Broadcom-WL-IPTag/Open:>>
- *
- * $Id: bcmip.h 785436 2018-10-18 17:54:25Z $
+ * <<Broadcom-WL-IPTag/Dual:>>
  */
 
 #ifndef _bcmip_h_
@@ -32,7 +26,7 @@
 
 #ifndef _TYPEDEFS_H_
 #include <typedefs.h>
-#endif // endif
+#endif
 
 /* This marks the start of a packed structure section. */
 #include <packed_section_start.h>
@@ -202,6 +196,7 @@ BWL_PRE_PACKED_STRUCT struct ipv6_exthdr_frag {
 	uint32	ident;
 } BWL_POST_PACKED_STRUCT;
 
+/* deprecated and replaced by ipv6_exthdr_len_check */
 static INLINE int32
 ipv6_exthdr_len(uint8 *h, uint8 *proto)
 {
@@ -226,6 +221,47 @@ ipv6_exthdr_len(uint8 *h, uint8 *proto)
 	return len;
 }
 
+/* determine length of exthdr with length checking */
+static INLINE int32
+ipv6_exthdr_len_check(uint8 *h, uint16 plen, uint8 *proto)
+{
+	uint16 len = 0, hlen;
+	struct ipv6_exthdr *eh = (struct ipv6_exthdr *)h;
+
+	/* must have at least one exthdr */
+	if (plen < sizeof(struct ipv6_exthdr)) {
+		return -1;
+	}
+
+	/* length check before accessing next exthdr */
+	while ((plen >= len + sizeof(struct ipv6_exthdr)) && IPV6_EXTHDR(eh->nexthdr)) {
+		if (eh->nexthdr == IPV6_EXTHDR_NONE) {
+			return -1;
+		} else if (eh->nexthdr == IPV6_EXTHDR_FRAGMENT) {
+			hlen = 8U;
+		} else if (eh->nexthdr == IPV6_EXTHDR_AUTH) {
+			hlen = (uint16)((eh->hdrlen + 2U) << 2U);
+		} else {
+			hlen = (uint16)IPV6_EXTHDR_LEN(eh);
+		}
+
+		/* check exthdr length */
+		if (plen < len + hlen) {
+			/* invalid exthdr */
+			return -1;
+		}
+		len += hlen;
+		eh = (struct ipv6_exthdr *)(h + len);
+	}
+
+	/* length check before accessing next exthdr */
+	if (plen >= len + sizeof(struct ipv6_exthdr)) {
+		*proto = eh->nexthdr;
+	} else {
+		*proto = 0;
+	}
+	return len;
+}
 #define IPV4_ISMULTI(a) (((a) & 0xf0000000) == 0xe0000000)
 
 #define IPV4_MCAST_TO_ETHER_MCAST(ipv4, ether) \

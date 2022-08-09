@@ -3,7 +3,7 @@
  *
  * Dependencies: bcmeth.h
  *
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -19,14 +19,8 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
  *
- *
- * <<Broadcom-WL-IPTag/Open:>>
- *
- * $Id: dnglevent.h $
+ * <<Broadcom-WL-IPTag/Dual:>>
  *
  * -----------------------------------------------------------------------------
  *
@@ -42,9 +36,12 @@
 
 #ifndef _TYPEDEFS_H_
 #include <typedefs.h>
-#endif // endif
+#endif
 #include <bcmeth.h>
 #include <ethernet.h>
+#ifdef HEALTH_CHECK
+#include <dngl_defs.h>
+#endif /* HEALTH_CHECK */
 
 /* This marks the start of a packed structure section. */
 #include <packed_section_start.h>
@@ -52,6 +49,7 @@
 #define DNGL_E_RSRVD_1				0x0
 #define DNGL_E_RSRVD_2				0x1
 #define DNGL_E_SOCRAM_IND			0x2
+#define DNGL_E_PROFILE_DATA_IND			0x3
 typedef BWL_PRE_PACKED_STRUCT struct
 {
 	uint16  version; /* Current version is 1 */
@@ -72,6 +70,37 @@ typedef BWL_PRE_PACKED_STRUCT struct bcm_dngl_socramind {
 	uint16			length; /* data length */
 	uint8			value[1]; /* data value with variable length specified by length */
 } BWL_POST_PACKED_STRUCT bcm_dngl_socramind_t;
+
+typedef BWL_PRE_PACKED_STRUCT struct bcm_dngl_profile_data_ind_t {
+	uint16 tag;
+	uint16 length;
+	uint8 value[];
+} BWL_POST_PACKED_STRUCT bcm_dngl_profile_data_ind_t;
+
+typedef BWL_PRE_PACKED_STRUCT struct bcm_dngl_arm_event {
+	uint32 type;
+	uint32 value;
+} BWL_POST_PACKED_STRUCT bcm_dngl_arm_event_t;
+
+#define PROFILE_DATA_IND_INFO 0x1
+
+#define PROFILE_SUB_TYPE_ARM_STATS_INFO 0x1
+
+typedef BWL_PRE_PACKED_STRUCT struct bcm_dngl_arm_stats_ind {
+	uint16	tag;
+	uint16	length;
+	uint8	value[];
+} BWL_POST_PACKED_STRUCT bcm_dngl_arm_stats_ind_t;
+
+typedef BWL_PRE_PACKED_STRUCT struct bcm_dngl_arm_stats {
+	uint32	cycles;
+	uint32	timestamp;
+	uint16	freq;
+	uint16	roh;
+	uint16	num_events;
+	uint16  seq_no;
+	uint8	value[];
+} BWL_POST_PACKED_STRUCT bcm_dngl_arm_stats_t;
 
 /* SOCRAM_IND type tags */
 typedef enum socram_ind_tag {
@@ -110,6 +139,9 @@ typedef BWL_PRE_PACKED_STRUCT struct bcm_dngl_healthcheck {
 #define HEALTH_CHECK_PCIEDEV_NODS_IND	0x6
 #define HEALTH_CHECK_PCIEDEV_LINKSPEED_FALLBACK_IND	0x7
 #define HEALTH_CHECK_PCIEDEV_DSACK_STALL_IND	0x8
+#define HEALTH_CHECK_PCIEDEV_FLOWRING_IND	0x9
+#define HEALTH_CHECK_PCIEDEV_HW_ASSERT_LONG_IND 0xA
+#define HEALTH_CHECK_PCIEDEV_RXPOST_LONG_IND	0xB
 
 #define HC_PCIEDEV_CONFIG_REGLIST_MAX	25
 typedef BWL_PRE_PACKED_STRUCT struct bcm_dngl_pcie_hc {
@@ -121,6 +153,7 @@ typedef BWL_PRE_PACKED_STRUCT struct bcm_dngl_pcie_hc {
 	uint32			pcie_config_regs[HC_PCIEDEV_CONFIG_REGLIST_MAX];
 } BWL_POST_PACKED_STRUCT bcm_dngl_pcie_hc_t;
 
+/* define to avoid compile issues in older branches which define hchk_sw_entity_t */
 #ifdef HCHK_COMMON_SW_EVENT
 /* Enumerating top level SW entities for use by health check */
 typedef enum {

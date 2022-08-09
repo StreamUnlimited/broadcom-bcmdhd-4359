@@ -3,7 +3,7 @@
  * Software-specific definitions shared between device and host side
  * Explains the shared area between host and dongle
  *
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -19,14 +19,8 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
  *
- *
- * <<Broadcom-WL-IPTag/Open:>>
- *
- * $Id: bcmpcie.h 821465 2019-05-23 19:50:00Z $
+ * <<Broadcom-WL-IPTag/Dual:>>
  */
 
 #ifndef	_bcmpcie_h_
@@ -48,6 +42,8 @@ typedef struct {
 #define BCMPCIE_MAX_TX_FLOWS	40
 #endif /* ! BCMPCIE_MAX_TX_FLOWS */
 
+#define PCIE_SHARED_VERSION_9		0x00009
+#define PCIE_SHARED_VERSION_8		0x00008
 #define PCIE_SHARED_VERSION_7		0x00007
 #define PCIE_SHARED_VERSION_6		0x00006 /* rev6 is compatible with rev 5 */
 #define PCIE_SHARED_VERSION_5		0x00005 /* rev6 is compatible with rev 5 */
@@ -152,6 +148,10 @@ typedef struct {
 #define PCIE_SHARED2_TRAP_ON_HOST_DB7	0x00040000u	/* can take a trap on DB7 from host */
 
 #define PCIE_SHARED2_DURATION_SCALE	0x00100000u
+#define PCIE_SHARED2_ETD_ADDR_SUPPORT	0x00800000u
+
+#define PCIE_SHARED2_TXCSO		0x00200000u	/* Tx Checksum offload support */
+#define PCIE_SHARED2_TXPOST_EXT		0x00400000u	/* extended txpost work item support */
 
 #define PCIE_SHARED2_D2H_D11_TX_STATUS	0x40000000
 #define PCIE_SHARED2_H2D_D11_TX_STATUS	0x80000000
@@ -267,6 +267,11 @@ enum d2hring_idx {
 #define BCMPCIE_D2H_RW_INDEX_ARRAY_SZ(rw_index_sz) \
 	((rw_index_sz) * BCMPCIE_D2H_COMMON_MSGRINGS)
 
+/* Backwards compatibility for legacy branches. */
+#if !defined(PHYS_ADDR_N)
+	#define PHYS_ADDR_N(name) name
+#endif
+
 /**
  * This type is used by a 'message buffer' (which is a FIFO for messages). Message buffers are used
  * for host<->device communication and are instantiated on both sides. ring_mem_t is instantiated
@@ -288,17 +293,17 @@ typedef struct ring_mem {
  * Perhaps this type should be renamed to make clear that it resides in device memory only.
  */
 typedef struct ring_info {
-	uint32		ringmem_ptr; /* ring mem location in dongle memory */
+	uint32		PHYS_ADDR_N(ringmem_ptr); /* ring mem location in dongle memory */
 
 	/* Following arrays are indexed using h2dring_idx and d2hring_idx, and not
 	 * by a ringid.
 	 */
 
 	/* 32bit ptr to arrays of WR or RD indices for all rings in dongle memory */
-	uint32		h2d_w_idx_ptr; /* Array of all H2D ring's WR indices */
-	uint32		h2d_r_idx_ptr; /* Array of all H2D ring's RD indices */
-	uint32		d2h_w_idx_ptr; /* Array of all D2H ring's WR indices */
-	uint32		d2h_r_idx_ptr; /* Array of all D2H ring's RD indices */
+	uint32		PHYS_ADDR_N(h2d_w_idx_ptr); /* Array of all H2D ring's WR indices */
+	uint32		PHYS_ADDR_N(h2d_r_idx_ptr); /* Array of all H2D ring's RD indices */
+	uint32		PHYS_ADDR_N(d2h_w_idx_ptr); /* Array of all D2H ring's WR indices */
+	uint32		PHYS_ADDR_N(d2h_r_idx_ptr); /* Array of all D2H ring's RD indices */
 
 	/* PCIE_DMA_INDEX feature: Dongle uses mem2mem DMA to sync arrays in host.
 	 * Host may directly fetch WR and RD indices from these host-side arrays.
@@ -318,8 +323,8 @@ typedef struct ring_info {
 	sh_addr_t	ifrm_w_idx_hostaddr; /* Array of all H2D ring's WR indices for IFRM */
 
 	/* 32bit ptr to arrays of HWA DB indices for all rings in dongle memory */
-	uint32		h2d_hwa_db_idx_ptr; /* Array of all H2D ring's HWA DB indices */
-	uint32		d2h_hwa_db_idx_ptr; /* Array of all D2H ring's HWA DB indices */
+	uint32		PHYS_ADDR_N(h2d_hwa_db_idx_ptr); /* Array of all H2D rings HWA DB indices */
+	uint32		PHYS_ADDR_N(d2h_hwa_db_idx_ptr); /* Array of all D2H rings HWA DB indices */
 
 } ring_info_t;
 
@@ -331,13 +336,13 @@ typedef struct {
 	/** shared area version captured at flags 7:0 */
 	uint32	flags;
 
-	uint32  trap_addr;
-	uint32  assert_exp_addr;
-	uint32  assert_file_addr;
+	uint32 PHYS_ADDR_N(trap_addr);
+	uint32 PHYS_ADDR_N(assert_exp_addr);
+	uint32 PHYS_ADDR_N(assert_file_addr);
 	uint32  assert_line;
-	uint32	console_addr;		/**< Address of hnd_cons_t */
+	uint32 PHYS_ADDR_N(console_addr);	/**< Address of hnd_cons_t */
 
-	uint32  msgtrace_addr;
+	uint32 PHYS_ADDR_N(msgtrace_addr);
 
 	uint32  fwid;
 
@@ -348,12 +353,12 @@ typedef struct {
 	uint32 dma_rxoffset; /* rsvd in spec */
 
 	/** these will be used for sleep request/ack, d3 req/ack */
-	uint32  h2d_mb_data_ptr;
-	uint32  d2h_mb_data_ptr;
+	uint32  PHYS_ADDR_N(h2d_mb_data_ptr);
+	uint32  PHYS_ADDR_N(d2h_mb_data_ptr);
 
 	/* information pertinent to host IPC/msgbuf channels */
 	/** location in the TCM memory which has the ring_info */
-	uint32	rings_info_ptr;
+	uint32	PHYS_ADDR_N(rings_info_ptr);
 
 	/** block of host memory for the scratch buffer */
 	uint32		host_dma_scratch_buffer_len;
@@ -385,13 +390,18 @@ typedef struct {
 	sh_addr_t       host_trap_addr;
 
 	/* location for host fatal error log buffer start address */
-	uint32		device_fatal_logbuf_start;
+	uint32 PHYS_ADDR_N(device_fatal_logbuf_start);
 
 	/* location in host memory for offloaded modules */
 	sh_addr_t	hoffload_addr;
 	uint32		flags3;
 	uint32		host_cap2;
-	uint32		host_cap3;
+	uint32		host_cap3;	/* host indicates its txpost ext tag capabilities */
+	uint32		PHYS_ADDR_N(etd_addr);
+
+	/* Device advertises the txpost extended tag capabilities */
+	uint32		device_txpost_ext_tags_bitmask;
+
 } pciedev_shared_t;
 
 /* Device F/W provides the following access function:
@@ -416,20 +426,24 @@ typedef struct {
 #define HOSTCAP_FAST_DELETE_RING		0x00200000
 #define HOSTCAP_PKT_TXSTATUS			0x00400000
 #define HOSTCAP_UR_FW_NO_TRAP			0x00800000 /* Don't trap on UR */
+#define HOSTCAP_TX_CSO				0x01000000
 #define HOSTCAP_HSCB				0x02000000
 /* Host support for extended device trap debug buffer */
 #define HOSTCAP_EXT_TRAP_DBGBUF			0x04000000
+#define HOSTCAP_TXPOST_EXT			0x08000000
 /* Host support for enhanced debug lane */
 #define HOSTCAP_EDL_RING			0x10000000
 #define HOSTCAP_PKT_TIMESTAMP			0x20000000
 #define HOSTCAP_PKT_HP2P			0x40000000
 #define HOSTCAP_HWA				0x80000000
+
 #define HOSTCAP2_DURATION_SCALE_MASK            0x0000003Fu
 
 /* extended trap debug buffer allocation sizes. Note that this buffer can be used for
  * other trap related purposes also.
  */
 #define BCMPCIE_HOST_EXT_TRAP_DBGBUF_LEN_MIN	(64u * 1024u)
+#define BCMPCIE_HOST_EXT_TRAP_DBGBUF_LEN	(96u * 1024u)
 #define BCMPCIE_HOST_EXT_TRAP_DBGBUF_LEN_MAX	(256u * 1024u)
 
 /**
@@ -489,6 +503,7 @@ typedef struct {
 #define D2HMB_FWHALT                    D2H_DEV_FWHALT
 #define D2HMB_TRAP_IN_TRAP              D2H_DEV_TRAP_IN_TRAP
 #define D2HMB_EXT_TRAP_DATA             D2H_DEV_EXT_TRAP_DATA
+#define D2H_FWTRAP_MAC_SSSR_RDY		0x00010000u	/* MAC SSSR prepped */
 
 /* Size of Extended Trap data Buffer */
 #define BCMPCIE_EXT_TRAP_DATA_MAXLEN  4096
@@ -511,6 +526,7 @@ typedef struct {
 #define CHECK_NOWRITE_SPACE(r, w, d) \
 	(((uint32)(r) == (uint32)((w) + 1)) || (((r) == 0) && ((w) == ((d) - 1))))
 
+/* These should be moved into pciedev.h --- */
 #define WRT_PEND(x)	((x)->wr_pending)
 #define DNGL_RING_WPTR(msgbuf)		(*((msgbuf)->tcm_rs_w_ptr)) /**< advanced by producer */
 #define BCMMSGBUF_RING_SET_W_PTR(msgbuf, a)	(DNGL_RING_WPTR(msgbuf) = (a))
@@ -532,5 +548,12 @@ typedef struct {
 /* Trap types copied in the pciedev_shared.trap_addr */
 #define	FW_INITIATED_TRAP_TYPE	(0x1 << 7)
 #define	HEALTHCHECK_NODS_TRAP_TYPE	(0x1 << 6)
+
+/* Device supported txpost extended tag capabilities */
+#define PCIE_SHARED2_DEV_TXPOST_EXT_TAG_CAP_RSVD	(1u << 0u) /* Reserved  */
+#define PCIE_SHARED2_DEV_TXPOST_EXT_TAG_CAP_CSO		(1u << 1u) /* CSO */
+#define PCIE_SHARED2_DEV_TXPOST_EXT_TAG_CAP_MESH	(1u << 2u) /* MESH */
+
+#define RING_MESH(x)	(((x)->txpost_ext_cap_flags) & PCIE_SHARED2_DEV_TXPOST_EXT_TAG_CAP_MESH)
 
 #endif	/* _bcmpcie_h_ */

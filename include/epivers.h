@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -15,37 +15,37 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
- *
  *
  * <<Broadcom-WL-IPTag/Open:>>
- *
- * $Id: epivers.h.in 596126 2015-10-29 19:53:48Z $
  *
 */
 
 #ifndef _epivers_h_
 #define _epivers_h_
 
-#define	EPI_MAJOR_VERSION	100
+#define EPI_MAJOR_VERSION	101
 
-#define	EPI_MINOR_VERSION	10
+#define EPI_MINOR_VERSION	10
 
-#define	EPI_RC_NUMBER		545
+#define EPI_RC_NUMBER		361
 
-#define	EPI_INCREMENTAL_NUMBER	0
+#define EPI_INCREMENTAL_NUMBER	0
 
-#define	EPI_BUILD_NUMBER	0
+#define EPI_BUILD_NUMBER	0
 
-#define	EPI_VERSION		100, 10, 545, 0
+#define EPI_VERSION		101, 10, 361, 0
 
-#define	EPI_VERSION_NUM		0x640a2210
+#define EPI_VERSION_NUM		0x650a1690
 
-#define EPI_VERSION_DEV		100.10.545
+#define EPI_VERSION_DEV		101.10.361
 
 /* Driver Version String, ASCII, 32 chars max */
-#define	EPI_VERSION_STR		"100.10.545.19 (r826445-20210310-3)"
+#if defined (WLTEST)
+#define EPI_VERSION_STR		"101.10.361 (wlan=r892223 WLTEST)"
+#elif (defined (BCMDBG_ASSERT) && !defined (BCMDBG_ASSERT_DISABLED))
+#define EPI_VERSION_STR		"101.10.361 (wlan=r892223 ASSRT)"
+#else
+#define EPI_VERSION_STR		"101.10.361.21 (wlan=r892223-20220709-5)"
+#endif /* BCMINTERNAL */
 
 #endif /* _epivers_h_ */

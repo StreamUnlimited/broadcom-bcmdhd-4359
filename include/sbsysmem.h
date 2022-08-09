@@ -1,7 +1,7 @@
 /*
  * SiliconBackplane System Memory core
  *
- * Copyright (C) 1999-2019, Broadcom.
+ * Copyright (C) 2020, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -17,14 +17,8 @@
  * derived from this software.  The special exception does not apply to any
  * modifications of the software.
  *
- *      Notwithstanding the above, under no circumstances may you combine this
- * software in any way with any other Broadcom software provided under a license
- * other than the GPL, without Broadcom's express prior written consent.
  *
- *
- * <<Broadcom-WL-IPTag/Open:>>
- *
- * $Id: sbsysmem.h 563229 2015-06-12 04:50:06Z $
+ * <<Broadcom-WL-IPTag/Dual:>>
  */
 
 #ifndef	_SBSYSMEM_H
@@ -57,16 +51,16 @@ typedef volatile struct sysmemregs {
 	uint32	cambankpatchtblbaseaddr;
 	uint32	cambankcmdreg;
 	uint32	cambankdatareg;
-	uint32	cambankmaskreg;
+	uint32	standbywait;
 	uint32	PAD[1];
 	uint32	bankinfo;
-	uint32	PAD[15];
-	uint32	extmemconfig;
-	uint32	extmemparitycsr;
-	uint32	extmemparityerrdata;
-	uint32	extmemparityerrcnt;
-	uint32	extmemwrctrlandsize;
-	uint32	PAD[84];
+	uint32  PAD[7];
+	uint32  region_n_regs[32];
+	uint32  initiat_n_masks[31];
+	uint32  PAD[1];
+	uint32  mpucontrol;
+	uint32  mpucapabilities;
+	uint32  PAD[31];
 	uint32	workaround;
 	uint32	pwrctl;
 	uint32	PAD[133];
@@ -75,6 +69,11 @@ typedef volatile struct sysmemregs {
 	uint32  sr_address;
 	uint32  sr_data;
 } sysmemregs_t;
+
+/* bus MPU region count mask of sysmemregs_t->mpucapabilities */
+#define ACC_MPU_REGION_CNT_MASK	0x7u
+/* bus MPU disable mask of sysmemregs_t->mpucontrol */
+#define BUSMPU_DISABLE_MASK	0xfu
 
 #endif	/* _LANGUAGE_ASSEMBLY */
 
@@ -117,6 +116,11 @@ typedef volatile struct sysmemregs {
 #define	SYSMEM_SRCI_ROMNB_SHIFT	5
 #define	SYSMEM_SRCI_SRNB_MASK	0x1f
 #define	SYSMEM_SRCI_SRNB_SHIFT	0
+/* Above bits are obsolete and replaced with below in rev 12 */
+#define	SYSMEM_SRCI_NEW_ROMNB_MASK	0xff000000u
+#define	SYSMEM_SRCI_NEW_ROMNB_SHIFT	24u
+#define	SYSMEM_SRCI_NEW_SRNB_MASK	0xff0000u
+#define	SYSMEM_SRCI_NEW_SRNB_SHIFT	16u
 
 /* Standby control register */
 #define	SRSC_SBYOVR_MASK	0x80000000
@@ -176,5 +180,12 @@ typedef volatile struct sysmemregs {
 /* bank info to calculate bank size */
 #define	SYSMEM_BANKINFO_SZBASE          8192
 #define SYSMEM_BANKSIZE_SHIFT		13      /* SYSMEM_BANKINFO_SZBASE */
+
+/* standbycontrol register default values */
+#define SYSMEM_SBYCNTRL_TIMEVAL		0x100000u	/* standbycontrol timeval[23:0] */
+#define SYSMEM_SBYCNTRL_TIMEVAL_MASK	0xffffffu
+
+/* sbywaitcycle register default values (sysme rev 8) */
+#define SYSMEM_SBYWAIT_RAM_TIMEVAL	0xau	/* RAM memory access after standby exit */
 
 #endif	/* _SBSYSMEM_H */
