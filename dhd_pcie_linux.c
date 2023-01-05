@@ -2078,7 +2078,11 @@ int
 dhdpcie_irq_disabled(dhd_bus_t *bus)
 {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 4, 0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 11, 0))
+	struct irq_desc *desc = irq_data_to_desc(irq_get_irq_data(bus->dev->irq));
+#else
 	struct irq_desc *desc = irq_to_desc(bus->dev->irq);
+#endif
 	/* depth will be zero, if enabled */
 	return desc->depth;
 #else
@@ -2631,7 +2635,11 @@ dhd_print_kirqstats(dhd_pub_t *dhd, unsigned int irq_num)
 	struct bcmstrbuf strbuf;
 	char tmp_buf[KIRQ_PRINT_BUF_LEN];
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 11, 0))
+	desc = irq_data_to_desc(irq_get_irq_data(irq_num));
+#else
 	desc = irq_to_desc(irq_num);
+#endif
 	if (!desc) {
 		DHD_ERROR(("%s : irqdesc is not found \n", __FUNCTION__));
 		return;
