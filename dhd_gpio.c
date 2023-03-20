@@ -146,7 +146,7 @@ static int dhd_wlan_set_carddetect(int present)
 
 static int dhd_wlan_get_mac_addr(unsigned char *buf, int ifidx)
 {
-	int err = 0;
+	int err = -1;
 
 	if (ifidx == 1) {
 #ifdef EXAMPLE_GET_MAC

@@ -14744,10 +14744,10 @@ dhd_legacy_preinit_ioctls(dhd_pub_t *dhd)
 	uint32 apsta = 0;
 	int ap_mode = 1;
 #endif /* (defined(AP) || defined(WLP2P)) && !defined(SOFTAP_AND_GC) */
-#ifdef GET_CUSTOM_MAC_ENABLE
 	struct ether_addr ea_addr;
 	char hw_ether[62];
-#endif /* GET_CUSTOM_MAC_ENABLE */
+	dhd_if_t *ifp = dhd->info->iflist[0];
+	bool set_mac = FALSE;
 #ifdef OKC_SUPPORT
 	uint32 okc = 1;
 #endif
@@ -14941,19 +14941,24 @@ dhd_legacy_preinit_ioctls(dhd_pub_t *dhd)
 	}
 #endif /* EVENT_LOG_RATE_HC */
 
-#ifdef GET_CUSTOM_MAC_ENABLE
 	memset(hw_ether, 0, sizeof(hw_ether));
+#ifdef GET_CUSTOM_MAC_ENABLE
 	ret = wifi_platform_get_mac_addr(dhd->info->adapter, hw_ether, 0);
+	if (!ret)
+		set_mac = TRUE;
 #ifdef GET_CUSTOM_MAC_FROM_CONFIG
-	if (!memcmp(&ether_null, &dhd->conf->hw_ether, ETHER_ADDR_LEN)) {
-		ret = 0;
+	else if (!memcmp(&ether_null, &dhd->conf->hw_ether, ETHER_ADDR_LEN)) {
+		set_mac = TRUE;
+		memcpy(hw_ether, &dhd->conf->hw_ether, sizeof(dhd->conf->hw_ether));
 	} else
 #endif
-	if (!ret) {
+#endif /* GET_CUSTOM_MAC_ENABLE */
+	if (ifp->set_macaddress) {
+		memcpy(hw_ether, ifp->mac_addr, ETHER_ADDR_LEN);
+		set_mac = TRUE;
+	}
+	if (set_mac) {
 		memset(buf, 0, sizeof(buf));
-#ifdef GET_CUSTOM_MAC_FROM_CONFIG
-		memcpy(hw_ether, &dhd->conf->hw_ether, sizeof(dhd->conf->hw_ether));
-#endif
 		bcopy(hw_ether, ea_addr.octet, sizeof(struct ether_addr));
 		bcm_mkiovar("cur_etheraddr", (void *)&ea_addr, ETHER_ADDR_LEN, buf, sizeof(buf));
 		ret = dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, buf, sizeof(buf), TRUE, 0);
@@ -14969,7 +14974,9 @@ dhd_legacy_preinit_ioctls(dhd_pub_t *dhd)
 				goto done;
 			}
 		}
-	} else {
+	}
+#ifdef GET_CUSTOM_MAC_ENABLE
+	else {
 		DHD_ERROR(("%s: can't get custom MAC address, ret=%d\n", __FUNCTION__, ret));
 		ret = BCME_NOTUP;
 		goto done;
