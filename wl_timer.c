@@ -255,7 +255,8 @@ wl_func_create_handler(struct wl_timer_params *timer_params)
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0))
 	if (!timer_params->func_workq) {
-		timer_params->func_workq = alloc_workqueue("timer_funcd", WQ_MEM_RECLAIM | WQ_HIGHPRI, 0);
+		timer_params->func_workq = alloc_workqueue("timer_funcd",
+			WQ_MEM_RECLAIM | WQ_HIGHPRI | WQ_UNBOUND, 0);
 	}
 	if (!timer_params->func_workq) {
 		TIMER_ERROR("wlan", "func_workq alloc_workqueue failed\n");
@@ -397,10 +398,11 @@ wl_timer_create_handler(struct wl_timer_params *timer_params)
 	int ret = 0;
 
 	TIMER_TRACE("wlan", "Enter\n");
-	
+
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0))
 	if (!timer_params->timer_workq) {
-		timer_params->timer_workq = alloc_workqueue("timerd", WQ_MEM_RECLAIM | WQ_HIGHPRI, 0);
+		timer_params->timer_workq = alloc_workqueue("timerd",
+			WQ_MEM_RECLAIM | WQ_HIGHPRI | WQ_UNBOUND, 0);
 	}
 	if (!timer_params->timer_workq) {
 		TIMER_ERROR("wlan", "timer_workq alloc_workqueue failed\n");

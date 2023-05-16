@@ -312,7 +312,8 @@ wl_ext_event_create_handler(struct wl_event_params *event_params)
 #else
 	/* Allocate workqueue for event */
 	if (!event_params->event_workq) {
-		event_params->event_workq = alloc_workqueue("ext_eventd", WQ_MEM_RECLAIM | WQ_HIGHPRI, 0);
+		event_params->event_workq = alloc_workqueue("ext_eventd",
+			WQ_MEM_RECLAIM | WQ_HIGHPRI | WQ_UNBOUND, 0);
 	}
 
 	if (!event_params->event_workq) {

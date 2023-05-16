@@ -1,7 +1,7 @@
 /*
  * Bloom filter support
  *
- * Copyright (C) 2020, Broadcom.
+ * Copyright (C) 2022, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -24,9 +24,15 @@
 #include <typedefs.h>
 #include <bcmdefs.h>
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 16, 0))
+#if defined(CONFIG_BCMDHD) && defined(__linux__)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0))
+#include <linux/stdarg.h>
+#else
 #include <stdarg.h>
-#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(5, 16, 0) */
+#endif /* LINUX_VERSION_CODE */
+#else
+#include <stdarg.h>
+#endif /* CONFIG_BCMDHD && __linux__ */
 
 #ifdef BCMDRIVER
 #include <osl.h>
@@ -34,6 +40,7 @@
 #else /* !BCMDRIVER */
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #ifndef ASSERT
 #define ASSERT(exp)
 #endif
@@ -71,7 +78,7 @@ bcm_bloom_create(bcm_bloom_alloc_t alloc_cb,
 		err = BCME_NOMEM;
 		goto done;
 	}
-	memset(bp, 0, sizeof(*bp));
+	bzero(bp, sizeof(*bp));
 
 	bp->cb_ctx = cb_ctx;
 	bp->max_hash = max_hash;
@@ -80,7 +87,7 @@ bcm_bloom_create(bcm_bloom_alloc_t alloc_cb,
 		err = BCME_NOMEM;
 		goto done;
 	}
-	memset(bp->hash, 0, sizeof(*bp->hash) * max_hash);
+	bzero(bp->hash, sizeof(*bp->hash) * max_hash);
 
 	if (filter_size > 0) {
 		bp->filter = (*alloc_cb)(cb_ctx, filter_size);
@@ -89,7 +96,7 @@ bcm_bloom_create(bcm_bloom_alloc_t alloc_cb,
 			goto done;
 		}
 		bp->filter_size = filter_size;
-		memset(bp->filter, 0, filter_size);
+		bzero(bp->filter, filter_size);
 	}
 
 	*bloom = bp;
