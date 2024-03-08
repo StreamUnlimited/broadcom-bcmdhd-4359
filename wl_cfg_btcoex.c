@@ -437,7 +437,7 @@ void* wl_cfg80211_btcoex_init(struct net_device *ndev)
 	return btco_inf;
 }
 
-void wl_cfg80211_btcoex_kill_handler()
+void wl_cfg80211_btcoex_kill_handler(void)
 {
 	if (!btcoex_info_loc)
 		return;
@@ -450,7 +450,7 @@ void wl_cfg80211_btcoex_kill_handler()
 	wl_cfg80211_btcoex_init_handler_status();
 }
 
-void wl_cfg80211_btcoex_deinit()
+void wl_cfg80211_btcoex_deinit(void)
 {
 	if (!btcoex_info_loc)
 		return;
@@ -565,11 +565,10 @@ int wl_cfg80211_set_btcoex_dhcp(struct net_device *dev, dhd_pub_t *dhd, char *co
 		}
 	}
 #ifdef  OEM_ANDROID
-	else if (powermode_val == '2')
+	else if (powermode_val == '2') {
 #else
-	else if (powermode_val == '0')
+	else if (powermode_val == '0') {
 #endif
-	{
 
 #if defined(OEM_ANDROID) && defined(DHCP_SCAN_SUPPRESS)
 		/* Since DHCP is complete, enable the scan back */

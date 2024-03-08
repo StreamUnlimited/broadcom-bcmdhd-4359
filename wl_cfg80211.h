@@ -29,6 +29,9 @@
 #define _wl_cfg80211_h_
 
 #include <linux/wireless.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)
+#include <linux/sched/clock.h>
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0) */
 #include <typedefs.h>
 #include <ethernet.h>
 #include <wlioctl.h>
@@ -138,8 +141,8 @@ struct wl_ibss;
 #define WL_SAE
 #endif /* LINUX_VERSION_CODE >= (4, 17, 0) && !(WL_SAE) */
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0)) && !defined(WL_DISABLE_SCAN_TYPE) && \
-	!defined(WL_SCAN_TYPE)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0)) && !defined(WL_DISABLE_SCAN_TYPE) \
+	&& !defined(WL_SCAN_TYPE)
 #define WL_SCAN_TYPE
 #endif /* WL_SCAN_TYPE */
 
@@ -153,6 +156,7 @@ struct wl_ibss;
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 0, 0))
 /* Use driver managed regd */
+//#define WL_AUTO_COUNTRY	1
 #define WL_SELF_MANAGED_REGDOM
 #endif /* KERNEL >= 4.0 */
 
@@ -171,11 +175,10 @@ struct wl_ibss;
 #endif /* LINUX_VERSION_CODE >= (4, 17, 0) && !(WL_NMI_IF) */
 
 /* Define to default v6 */
-#define USE_STA_INFO_V6
 #ifdef USE_STA_INFO_V6
 typedef sta_info_v6_t wlcfg_sta_info_t;
 /* Support ver >= 6 */
-#define IS_STA_INFO_VER(sta) (dtoh16(sta->ver) >= WL_STA_VER_6 || (dtoh16(sta->ver) == WL_STA_VER_4))
+#define IS_STA_INFO_VER(sta) (dtoh16(sta->ver) >= WL_STA_VER_6)
 #define WL_STAINFO_VER WL_STA_VER_6
 #elif defined(USE_STA_INFO_V5)
 typedef sta_info_v5_t wlcfg_sta_info_t;
@@ -183,8 +186,10 @@ typedef sta_info_v5_t wlcfg_sta_info_t;
 #define WL_STAINFO_VER WL_STA_VER_5
 #else
 typedef sta_info_v4_t wlcfg_sta_info_t;
-#define IS_STA_INFO_VER(sta) (dtoh16(sta->ver) == WL_STA_VER_4)
-#define WL_STAINFO_VER WL_STA_VER_4
+typedef sta_info_v6_t wlcfg_sta_info_v6_t;
+typedef sta_info_v5_t wlcfg_sta_info_v5_t;
+typedef sta_info_v4_t wlcfg_sta_info_v4_t;
+#define IS_STA_INFO_VER(sta) (dtoh16(sta->ver) >= WL_STA_VER_4 && dtoh16(sta->ver) <= WL_STA_VER_6)
 #endif /* USE_STA_INFO_V6 */
 
 /* MSCS default configuration values */
@@ -204,12 +209,33 @@ typedef sta_info_v4_t wlcfg_sta_info_t;
 #define MSCS_CFG_DEF_TCLAS_MASK         0x5Fu   /* TCLAS mask  */
 #endif /* MSCS_CFG_DEF_TCLAS_MASK */
 
+#if defined(CONFIG_6GHZ_BKPORT) || (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0))
+/* Native 6GHz band supported available. For Backported
+ * kernels, kernels/customer makefiles should explicitly
+ * define CONFIG_6GHZ_BKPORT
+ */
+#if defined(WL_6G_BAND)
+#define CFG80211_6G_SUPPORT
+#endif
+#endif /* CONFIG_6GHZ_BKPORT || LINUX_VER >= 5.4 */
+
 #define CH_TO_CHSPC(band, _channel) \
 	((_channel | band) | WL_CHANSPEC_BW_20 | WL_CHANSPEC_CTL_SB_NONE)
+#ifdef EXT_REGD_INFO
+#define HW_VALUE_CHANNEL_2G(_channel) _channel
+#define HW_VALUE_CHANNEL_5G(_channel) _channel
+#define HW_VALUE_CHANNEL_6G(_channel) (CH_MAX_5G_CHANNEL  + _channel)
+#define HW_VALUE_CHANNEL_6G_2(_channel) (CH_MAX_5G_CHANNEL  + 2)
+#else
+#define HW_VALUE_CHANNEL_2G(_channel) CH_TO_CHSPC(WL_CHANSPEC_BAND_2G, _channel)
+#define HW_VALUE_CHANNEL_5G(_channel) CH_TO_CHSPC(WL_CHANSPEC_BAND_5G, _channel)
+#define HW_VALUE_CHANNEL_6G(_channel) CH_TO_CHSPC(WL_CHANSPEC_BAND_6G, _channel)
+#define HW_VALUE_CHANNEL_6G_2(_channel) 0x5002
+#endif /*  EXT_REGD_INFO */
 #define CHAN2G(_channel, _freq, _flags) {			\
 	.band			= IEEE80211_BAND_2GHZ,		\
 	.center_freq		= (_freq),			\
-	.hw_value		= CH_TO_CHSPC(WL_CHANSPEC_BAND_2G, _channel),			\
+	.hw_value		= HW_VALUE_CHANNEL_2G(_channel), \
 	.flags			= (_flags),			\
 	.max_antenna_gain	= 0,				\
 	.max_power		= 30,				\
@@ -218,7 +244,7 @@ typedef sta_info_v4_t wlcfg_sta_info_t;
 #define CHAN5G(_channel, _flags) {				\
 	.band			= IEEE80211_BAND_5GHZ,		\
 	.center_freq		= 5000 + (5 * (_channel)),	\
-	.hw_value		= CH_TO_CHSPC(WL_CHANSPEC_BAND_5G, _channel),			\
+	.hw_value		= HW_VALUE_CHANNEL_5G(_channel), \
 	.flags			= (_flags),			\
 	.max_antenna_gain	= 0,				\
 	.max_power		= 30,				\
@@ -228,7 +254,7 @@ typedef sta_info_v4_t wlcfg_sta_info_t;
 #define CHAN6G(_channel, _flags) {				\
 	.band			= IEEE80211_BAND_6GHZ,		\
 	.center_freq		= 5950 + (5 * (_channel)),	\
-	.hw_value		= CH_TO_CHSPC(WL_CHANSPEC_BAND_6G, _channel),			\
+	.hw_value		= HW_VALUE_CHANNEL_6G(_channel), \
 	.flags			= (_flags),			\
 	.max_antenna_gain	= 0,				\
 	.max_power		= 30,				\
@@ -237,7 +263,7 @@ typedef sta_info_v4_t wlcfg_sta_info_t;
 #define CHAN6G_CHAN2(_flags) {					\
 	.band			= IEEE80211_BAND_6GHZ,		\
 	.center_freq		= 5935,				\
-	.hw_value		= 0x5002,			\
+	.hw_value		= HW_VALUE_CHANNEL_6G_2(_channel), \
 	.flags			= (_flags),			\
 	.max_antenna_gain	= 0,				\
 	.max_power		= 30,				\
@@ -246,7 +272,7 @@ typedef sta_info_v4_t wlcfg_sta_info_t;
 #define CHAN6G(_channel, _flags) {				\
 	.band			= IEEE80211_BAND_5GHZ,		\
 	.center_freq		= 5950 + (5 * (_channel)),	\
-	.hw_value		= CH_TO_CHSPC(WL_CHANSPEC_BAND_6G, _channel),			\
+	.hw_value		= HW_VALUE_CHANNEL_6G(_channel), \
 	.flags			= (_flags),			\
 	.max_antenna_gain	= 0,				\
 	.max_power		= 30,				\
@@ -255,7 +281,7 @@ typedef sta_info_v4_t wlcfg_sta_info_t;
 #define CHAN6G_CHAN2(_flags) {					\
 	.band			= IEEE80211_BAND_5GHZ,		\
 	.center_freq		= 5935,				\
-	.hw_value		= 0x5002,			\
+	.hw_value		= HW_VALUE_CHANNEL_6G_2(_channel), \
 	.flags			= (_flags),			\
 	.max_antenna_gain	= 0,				\
 	.max_power		= 30,				\
@@ -272,6 +298,10 @@ typedef sta_info_v4_t wlcfg_sta_info_t;
 #else
 #define IS_AKM_OWE(akm) FALSE
 #endif
+
+#ifdef BCMCCX
+#define DOT11_LEAP_AUTH        0x80 /* LEAP auth frame paylod constants */
+#endif /* BCMCCX */
 
 #if defined(IL_BIGENDIAN)
 #include <bcmendian.h>
@@ -305,16 +335,6 @@ typedef sta_info_v4_t wlcfg_sta_info_t;
 #define WAIT_FOR_DISCONNECT_MAX 10
 #endif /* WAIT_FOR_DISCONNECT_MAX */
 #define WAIT_FOR_DISCONNECT_STATE_SYNC 10
-
-#if defined(CONFIG_6GHZ_BKPORT) || (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0))
-/* Native 6GHz band supported available. For Backported
- * kernels, kernels/customer makefiles should explicitly
- * define CONFIG_6GHZ_BKPORT
- */
-#if defined(WL_6G_BAND)
-#define CFG80211_6G_SUPPORT
-#endif
-#endif /* CONFIG_6GHZ_BKPORT || LINUX_VER >= 5.4 */
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 7, 0))
 /* Newer kernels use defines from nl80211.h */
@@ -418,6 +438,7 @@ extern char *dhd_log_dump_get_timestamp(void);
 #endif /* SUPPORT_AP_RADIO_PWRSAVE */
 
 #ifdef BCMWAPI_WPI
+#ifdef OEM_ANDROID
 #ifdef CFG80211_WAPI_BKPORT
 #define IS_WAPI_VER(version) (version == NL80211_WAPI_VERSION_1)
 #undef WLAN_AKM_SUITE_WAPI_PSK
@@ -425,7 +446,6 @@ extern char *dhd_log_dump_get_timestamp(void);
 #undef WLAN_AKM_SUITE_WAPI_CERT
 #define WLAN_AKM_SUITE_WAPI_CERT		0x000FAC14
 #else
-#ifdef OEM_ANDROID
 #undef NL80211_WAPI_VERSION_1
 #define NL80211_WAPI_VERSION_1		0
 
@@ -436,18 +456,18 @@ extern char *dhd_log_dump_get_timestamp(void);
 #define WLAN_AKM_SUITE_WAPI_CERT	0x000FACFF /* WAPI */
 
 #define IS_WAPI_VER(version) (version == NL80211_WAPI_VERSION_1)
+#endif /* CFG80211_WAPI_BKPORT */
 #else
 #undef WLAN_AKM_SUITE_WAPI_PSK
-#define WLAN_AKM_SUITE_WAPI_PSK         0x000FAC04
+#define WLAN_AKM_SUITE_WAPI_PSK         0x000FAC13
 
 #undef WLAN_AKM_SUITE_WAPI_CERT
-#define WLAN_AKM_SUITE_WAPI_CERT        0x000FAC12
+#define WLAN_AKM_SUITE_WAPI_CERT        0x000FAC14
 
 #undef NL80211_WAPI_VERSION_1
-#define NL80211_WAPI_VERSION_1			1 << 2
+#define NL80211_WAPI_VERSION_1			1 << 3
 #define IS_WAPI_VER(version) (version & NL80211_WAPI_VERSION_1)
 #endif /* OEM_ANDROID */
-#endif /* CFG80211_WAPI_BKPORT */
 #endif /* BCMWAPI_WPI */
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 0, 0))
@@ -1466,7 +1486,7 @@ struct wl_assoc_ielen {
 #define MIN_PMKID_LIST_V2_FW_MINOR 0
 
 #define NEW_PMK_MGR_API_BACK_PORTED(ver)  \
-	((ver.wlc_ver_major == 12) && (ver.wlc_ver_minor == 2))
+	((ver.wlc_ver_major == 12) && (ver.wlc_ver_minor >= 2))
 
 #define WLC_PMKDB_SUPPORT(ver) \
 	((ver.wlc_ver_major >= PMKDB_WLC_VER) || \
@@ -1559,6 +1579,9 @@ struct parsed_ies {
 	u32 rate_ie_len;
 	const bcm_tlv_t *ext_rate_ie;
 	u32 ext_rate_ie_len;
+#ifdef WL11U
+	bcm_tlv_t *interworking_ie;
+#endif /* WL11U */
 };
 
 #ifdef WL_SDO
@@ -2023,6 +2046,7 @@ struct bcm_cfg80211 {
 	spinlock_t cfgdrv_lock;	/* to protect scan status (and others if needed) */
 	struct completion act_frm_scan;
 	struct completion iface_disable;
+	struct completion iface_up;
 	struct completion wait_next_af;
 	struct mutex usr_sync;	/* maily for up/down synchronization */
 	struct mutex if_sync;	/* maily for iface op synchronization */
@@ -2089,6 +2113,9 @@ struct bcm_cfg80211 {
 	struct afx_hdl *afx_hdl;
 	struct p2p_info *p2p;
 	bool p2p_supported;
+#ifdef WL_FILS
+	bool fils_supported;
+#endif /* WL_FILS */
 	void *btcoex_info;
 	timer_list_compat_t scan_timeout;   /* Timer for catch scan event timeout */
 #ifdef WL_CFG80211_GON_COLLISION
@@ -2148,6 +2175,7 @@ struct bcm_cfg80211 {
 #endif /* WLAIBSS_MCHAN */
 	bool bss_pending_op;		/* indicate where there is a pending IF operation */
 #ifdef WLFBT
+	bool fbt_auth_done;
 	uint8 fbt_key[FBT_KEYLEN];
 #endif
 	int roam_offload;
@@ -2328,6 +2356,7 @@ struct bcm_cfg80211 {
 #ifdef WL_P2P_6G
 	bool p2p_6g_enabled;	/* P2P 6G support enabled */
 #endif /* WL_P2P_6G */
+	u32 authresp_status;
 #ifdef BCMDBUS
 	bool bus_resuming;
 #endif /* BCMDBUS */
@@ -2345,7 +2374,7 @@ struct bcm_cfg80211 {
 	int best_2g_ch;
 	int best_5g_ch;
 	int best_6g_ch;
-};
+}; /* struct bcm_cfg80211 */
 
 /* Max auth timeout allowed in case of EAP is 70sec, additional 5 sec for
 * inter-layer overheads
@@ -3611,6 +3640,26 @@ extern int wl_cfgnan_get_stats(struct bcm_cfg80211 *cfg);
 
 extern s32 wl_cfg80211_set_wsec_info(struct net_device *dev, uint32 *data,
 	uint16 data_len, int tag);
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0))
+#define CH_DEFAULT_FLAGS    IEEE80211_CHAN_DISABLED | IEEE80211_CHAN_NO_20MHZ
+#else /* (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0)) */
+#define CH_DEFAULT_FLAGS    IEEE80211_CHAN_DISABLED
+#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0)) */
+
+#ifdef EXT_REGD_INFO
+#define WL_CHANNEL_ARRAY_INIT(band_chan_arr) \
+do { \
+	u32 arr_size, k; \
+	arr_size = ARRAYSIZE(band_chan_arr); \
+	for (k = 0; k < arr_size; k++) { \
+		band_chan_arr[k].flags =  CH_DEFAULT_FLAGS \
+			| IEEE80211_CHAN_NO_HT40 \
+			| IEEE80211_CHAN_NO_80MHZ \
+			| IEEE80211_CHAN_NO_160MHZ; \
+	} \
+} while (0)
+
+#else
 #define WL_CHANNEL_ARRAY_INIT(band_chan_arr)	\
 do {	\
 	u32 arr_size, k;	\
@@ -3619,6 +3668,7 @@ do {	\
 		band_chan_arr[k].flags = IEEE80211_CHAN_DISABLED;	\
 	}	\
 } while (0)
+#endif /* EXT_REGD_INFO */
 
 #define WL_CHANNEL_COPY_FLAG(band_chan_arr)    \
 do {   \

@@ -577,6 +577,7 @@ int dhd_net_bus_put(struct net_device *dev);
 #if defined(WLADPS)
 #define ADPS_ENABLE	1
 #define ADPS_DISABLE	0
+#define ADPS_MODE_PM2_ONLY	3
 
 int dhd_enable_adps(dhd_pub_t *dhd, uint8 on);
 #endif
@@ -601,5 +602,8 @@ void dhd_set_platform_ext_name_for_chip_version(char* chip_version);
 #endif /* USE_CID_CHECK */
 #endif /* SUPPORT_MULTIPLE_NVRAM || SUPPORT_MULTIPLE_CLMBLOB */
 void dhd_netif_rx_ni(struct sk_buff * skb);
+#if defined(DBG_PKT_MON) && !defined(PCIE_FULL_DONGLE)
+extern bool dhd_80211_mon_pkt(dhd_pub_t *dhdp, void *pkt, int ifidx);
+#endif /* DBG_PKT_MON */
 
 #endif /* __DHD_LINUX_H__ */

@@ -24,16 +24,6 @@
 #include <typedefs.h>
 #include <bcmdefs.h>
 
-#if defined(CONFIG_BCMDHD) && defined(__linux__)
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0))
-#include <linux/stdarg.h>
-#else
-#include <stdarg.h>
-#endif /* LINUX_VERSION_CODE */
-#else
-#include <stdarg.h>
-#endif /* CONFIG_BCMDHD && __linux__ */
-
 #ifdef BCMDRIVER
 #include <osl.h>
 #else /* !BCMDRIVER */

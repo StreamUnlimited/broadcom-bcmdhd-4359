@@ -61,7 +61,7 @@ void wl_cfgvendor_custom_advlog_roam_log(void *plog, uint32 armcycle);
 
 #define container_of(ptr, type, member) \
 		(type *)((char *)(ptr) - offsetof(type, member))
-#endif
+#endif /* NDIS */
 
 uint8 control_logtrace = CUSTOM_CONTROL_LOGTRACE;
 
@@ -454,10 +454,6 @@ dhd_dbg_msgtrace_msg_parser(void *event_data)
 #ifdef SHOW_LOGTRACE
 #define DATA_UNIT_FOR_LOG_CNT 4
 
-#if defined(STRICT_GCC_WARNINGS) && defined(__GNUC__)
-#pragma GCC diagnostic pop
-#endif
-
 int
 replace_percent_p_to_x(char *fmt)
 {
@@ -583,8 +579,19 @@ done:
 #define LOG_PRINT_CNT_MAX	16u
 #define EL_MSEC_PER_SEC	1000
 #ifdef DHD_LOG_PRINT_RATE_LIMIT
-#define MAX_LOG_PRINT_COUNT 100u
-#define LOG_PRINT_THRESH (1u * USEC_PER_SEC)
+#ifdef DHD_DEBUG
+#undef MAX_LOG_PRINT_COUNT
+#define MAX_LOG_PRINT_COUNT   50000u
+#undef LOG_PRINT_THRESH
+#define LOG_PRINT_THRESH      (1u * USEC_PER_SEC)
+#else /* DHD_DEBUG */
+#ifndef MAX_LOG_PRINT_COUNT
+#define MAX_LOG_PRINT_COUNT   5000u
+#endif /* MAX_LOG_PRINT_COUNT */
+#ifndef LOG_PRINT_THRESH
+#define LOG_PRINT_THRESH      (1u * USEC_PER_SEC)
+#endif /* LOG_PRINT_THRESH */
+#endif /* DHD_DEBUG */
 #endif
 #define EL_PARSE_VER	"V02"
 static uint64 verboselog_ts_saved = 0;
@@ -1188,6 +1195,9 @@ dhd_dbg_msgtrace_log_parser(dhd_pub_t *dhdp, void *event_data,
 				"datalen:%u cur_datalen:%u msgtrace_hdr_present:%d\n",
 				__FUNCTION__, logset, block, block_hdr_len,
 				datalen_bak, datalen, msgtrace_hdr_present));
+			dhd_prhex("[event_data]", (char*)event_data, datalen_bak,
+				DHD_ERROR_VAL);
+			break;
 		}
 
 		/* skip zero padding at end of frame */
@@ -1224,10 +1234,16 @@ dhd_dbg_msgtrace_log_parser(dhd_pub_t *dhdp, void *event_data,
 		/* skip 4 bytes time stamp packet */
 		if (prcd_log_hdr.tag == EVENT_LOG_TAG_TS ||
 			prcd_log_hdr.tag == EVENT_LOG_TAG_ENHANCED_TS) {
-			datalen -= (log_pyld_len + log_hdr_len);
+			if (datalen >= (log_pyld_len + log_hdr_len)) {
+				datalen -= (log_pyld_len + log_hdr_len);
+			} else {
+				DHD_ERROR(("%s: invalid length : %d < %d + %d\n",
+					__FUNCTION__, datalen, log_pyld_len, log_hdr_len));
+				datalen = 0;
+			}
 			continue;
 		}
-		if (!(log_item = MALLOC(dhdp->osh, sizeof(*log_item)))) {
+		if (!(log_item = VMALLOC(dhdp->osh, sizeof(*log_item)))) {
 			DHD_ERROR(("%s allocating log list item failed\n",
 				__FUNCTION__));
 			break;
@@ -1244,7 +1260,13 @@ dhd_dbg_msgtrace_log_parser(dhd_pub_t *dhdp, void *event_data,
 		log_item->prcd_log_hdr.binary_payload = prcd_log_hdr.binary_payload;
 
 		dll_insert(&log_item->list, &list_head);
-		datalen -= (log_pyld_len + log_hdr_len);
+		if (datalen >= (log_pyld_len + log_hdr_len)) {
+			datalen -= (log_pyld_len + log_hdr_len);
+		} else {
+			DHD_ERROR(("%s: invalid length : %d < %d + %d\n",
+				__FUNCTION__, datalen, log_pyld_len, log_hdr_len));
+			datalen = 0;
+		}
 	}
 
 	while (!dll_empty(&list_head)) {
@@ -1312,7 +1334,7 @@ dhd_dbg_msgtrace_log_parser(dhd_pub_t *dhdp, void *event_data,
 				logset, block, (uint32 *)data);
 		}
 		dll_delete(cur);
-		MFREE(dhdp->osh, log_item, sizeof(*log_item));
+		VMFREE(dhdp->osh, log_item, sizeof(*log_item));
 
 	}
 	BCM_REFERENCE(log_hdr);
@@ -1325,7 +1347,7 @@ exit:
 		GCC_DIAGNOSTIC_POP();
 
 		dll_delete(cur);
-		MFREE(dhdp->osh, log_item, sizeof(*log_item));
+		VMFREE(dhdp->osh, log_item, sizeof(*log_item));
 	}
 
 	VMFREE(dhdp->osh, logbuf, ring_data_len);
@@ -1740,6 +1762,8 @@ __dhd_dbg_free_tx_pkts(dhd_pub_t *dhdp, dhd_dbg_tx_info_t *tx_pkts,
 	while ((count < pkt_count) && tx_pkts) {
 		if (tx_pkts->info.pkt) {
 			PKTFREE(dhdp->osh, tx_pkts->info.pkt, TRUE);
+			/* Set NULL pointer after freeing for preventing dangling pointer problem */
+			tx_pkts->info.pkt = NULL;
 		}
 		tx_pkts++;
 		count++;
@@ -1758,6 +1782,8 @@ __dhd_dbg_free_rx_pkts(dhd_pub_t *dhdp, dhd_dbg_rx_info_t *rx_pkts,
 	while ((count < pkt_count) && rx_pkts) {
 		if (rx_pkts->info.pkt) {
 			PKTFREE(dhdp->osh, rx_pkts->info.pkt, TRUE);
+			/* Set NULL pointer after freeing for preventing dangling pointer problem */
+			rx_pkts->info.pkt = NULL;
 		}
 		rx_pkts++;
 		count++;
@@ -1941,6 +1967,13 @@ dhd_dbg_start_pkt_monitor(dhd_pub_t *dhdp)
 	dhd_dbg_pkt_mon_state_t tx_status_state;
 	dhd_dbg_pkt_mon_state_t rx_pkt_state;
 	unsigned long flags;
+#ifdef DBG_PKT_MON_ROAM
+	/* assoc mgmt logging for assoc/roam is allowed by default */
+	uint32 enable = (1u << WL_AML_ROAM_ENABLE | 1u << WL_AML_ASSOC_ENABLE);
+#else
+	/* assoc mgmt logging for assoc is allowed by default */
+	uint32 enable = (1u << WL_AML_ASSOC_ENABLE);
+#endif
 
 	if (!dhdp || !dhdp->dbg) {
 		DHD_PKT_MON(("%s(): dhdp=%p, dhdp->dbg=%p\n", __FUNCTION__,
@@ -1948,7 +1981,7 @@ dhd_dbg_start_pkt_monitor(dhd_pub_t *dhdp)
 		return -EINVAL;
 	}
 
-	if (do_iovar_aml_enable(dhdp, 1) == BCME_OK) {
+	if (do_iovar_aml_enable(dhdp, enable) == BCME_OK) {
 		dhdp->aml_enable = TRUE;
 	}
 
@@ -2011,6 +2044,9 @@ dhd_dbg_monitor_tx_pkts(dhd_pub_t *dhdp, void *pkt, uint32 pktid, frame_type typ
 	uint32 pkt_hash, driver_ts;
 	uint16 pkt_pos;
 	unsigned long flags;
+#if !defined(PCIE_FULL_DONGLE)
+	void *clone_pkt = NULL;
+#endif
 
 	if (!dhdp || !dhdp->dbg) {
 		DHD_PKT_MON(("%s(): dhdp=%p, dhdp->dbg=%p\n", __FUNCTION__,
@@ -2036,12 +2072,20 @@ dhd_dbg_monitor_tx_pkts(dhd_pub_t *dhdp, void *pkt, uint32 pktid, frame_type typ
 				} else {
 					tx_pkts[pkt_pos].fate = TX_PKT_FATE_SENT;
 				}
+				tx_pkts[pkt_pos].info.pkt_len = PKTLEN(dhdp->osh, pkt);
 			} else {
+#if !defined(PCIE_FULL_DONGLE)
+				clone_pkt = PKTDUP(dhdp->osh, pkt);
+				skb_pull((struct sk_buff*)clone_pkt, SDIO_HLEN);
+				tx_pkts[pkt_pos].info.pkt = clone_pkt;
+				tx_pkts[pkt_pos].info.pkt_len = PKTLEN(dhdp->osh, clone_pkt) - SDIO_HLEN;
+#else
 				tx_pkts[pkt_pos].info.pkt = PKTDUP(dhdp->osh, pkt);
+				tx_pkts[pkt_pos].info.pkt_len = PKTLEN(dhdp->osh, pkt);
+#endif
 				tx_pkts[pkt_pos].fate = TX_PKT_FATE_DRV_QUEUED;
 			}
 
-			tx_pkts[pkt_pos].info.pkt_len = PKTLEN(dhdp->osh, pkt);
 			tx_pkts[pkt_pos].info.pkt_hash = pkt_hash;
 			tx_pkts[pkt_pos].info.driver_ts = driver_ts;
 			tx_pkts[pkt_pos].info.firmware_ts = 0U;
@@ -2338,7 +2382,7 @@ dhd_dbg_monitor_get_tx_pkts(dhd_pub_t *dhdp, void __user *user_buf,
 	if (in_compat_syscall())
 #else
 	if (is_compat_task())
-#endif
+#endif /* LINUX_VER >= 4.6 */
 	{
 		cptr = (compat_wifi_tx_report_t *)user_buf;
 		while ((count < pkt_count) && tx_pkt && cptr) {
@@ -2418,7 +2462,7 @@ dhd_dbg_monitor_get_rx_pkts(dhd_pub_t *dhdp, void __user *user_buf,
 	uint16 pkt_count, count;
 	unsigned long flags;
 	dhd_dbg_rx_info_t *tmp_rx_pkt = NULL;
-	uint32 alloc_len, i, ret;
+	uint32 alloc_len, i, ret = BCME_OK;
 
 	BCM_REFERENCE(ptr);
 	BCM_REFERENCE(cptr);
@@ -2453,7 +2497,7 @@ dhd_dbg_monitor_get_rx_pkts(dhd_pub_t *dhdp, void __user *user_buf,
 	if ((ret = memcpy_s(tmp_rx_pkt, alloc_len, ori_rx_pkt, alloc_len))) {
 		DHD_PKT_MON_UNLOCK(dhdp->dbg->pkt_mon_lock, flags);
 		DHD_ERROR(("%s: failed to copy tmp_rx_pkt ret:%d", __FUNCTION__, ret));
-		return -EINVAL;
+		goto exit;
 	}
 	for (i = 0; i < pkt_count; i++) {
 		tmp_rx_pkt[i].info.pkt = skb_copy((struct sk_buff*)ori_rx_pkt[i].info.pkt,
@@ -2461,7 +2505,7 @@ dhd_dbg_monitor_get_rx_pkts(dhd_pub_t *dhdp, void __user *user_buf,
 		if (!tmp_rx_pkt[i].info.pkt) {
 			DHD_PKT_MON_UNLOCK(dhdp->dbg->pkt_mon_lock, flags);
 			DHD_ERROR(("%s: failed to copy skb", __FUNCTION__));
-			return -ENOMEM;
+			goto exit;
 		}
 	}
 	rx_pkt = tmp_rx_pkt;
@@ -2472,7 +2516,7 @@ dhd_dbg_monitor_get_rx_pkts(dhd_pub_t *dhdp, void __user *user_buf,
 	if (in_compat_syscall())
 #else
 	if (is_compat_task())
-#endif
+#endif /* LINUX_VER >= 4.6 */
 	{
 		cptr = (compat_wifi_rx_report_t *)user_buf;
 		while ((count < pkt_count) && rx_pkt && cptr) {
@@ -2517,12 +2561,13 @@ dhd_dbg_monitor_get_rx_pkts(dhd_pub_t *dhdp, void __user *user_buf,
 
 	*resp_count = pkt_count;
 
+exit:
 	for (i = 0; i < pkt_count; i++) {
 		PKTFREE(dhdp->osh, tmp_rx_pkt[i].info.pkt, TRUE);
 	}
 	MFREE(dhdp->osh, tmp_rx_pkt, alloc_len);
 
-	return BCME_OK;
+	return ret;
 }
 
 int

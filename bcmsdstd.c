@@ -63,7 +63,7 @@ uint sd_msglevel = SDH_ERROR_VAL;
 
 uint sd_hiok = TRUE;			/* Use hi-speed mode if available? */
 uint sd_sdmode = SDIOH_MODE_SD4;	/* Use SD4 mode by default */
-uint sd_f2_blocksize = 64;		/* Default blocksize */
+uint sd_f2_blocksize = 256;		/* Default blocksize */
 uint sd_f1_blocksize = BLOCK_SIZE_4318;		/* Default blocksize */
 
 #define sd3_trace(x)
@@ -526,7 +526,8 @@ enum {
 	IOV_CLOCK,
 	IOV_UHSIMOD,
 	IOV_TUNEMOD,
-	IOV_TUNEDIS
+	IOV_TUNEDIS,
+	IOV_DS
 };
 
 const bcm_iovar_t sdioh_iovars[] = {
@@ -556,6 +557,7 @@ const bcm_iovar_t sdioh_iovars[] = {
 #endif
 	{"tuning_mode", IOV_TUNEMOD,	0,	0, IOVT_UINT32,	0},
 	{"sd3_tuning_disable", IOV_TUNEDIS,	0,	0, IOVT_BOOL,	0},
+	{"sd_ds",	IOV_DS,		0,	0, IOVT_UINT32,	0},
 
 	{NULL, 0, 0, 0, 0, 0 }
 };
@@ -1004,6 +1006,58 @@ sdioh_iovar_op(sdioh_info_t *si, const char *name,
 	case IOV_SVAL(IOV_TUNEDIS):
 		si->sd3_tuning_disable = (bool)int_val;
 		break;
+
+	case IOV_GVAL(IOV_DS):
+	{
+		uint32 drvstrn;
+		int status;
+
+		status = sdstd_card_regread(si, 0, SDIOD_CCCR_DRIVER_STRENGTH, 1, &drvstrn);
+		if (status != BCME_OK) {
+			sd_err(("sd_ds error for read SDIOD_CCCR_DRIVER_STRENGTH : 0x%x\n",
+				status));
+			bcmerror = BCME_SDIO_ERROR;
+		} else {
+			sd_err(("sd_ds get cccr driver strength 0x%x\n", drvstrn));
+		}
+		int_val = (uint32)drvstrn;
+		bcopy(&int_val, arg, val_size);
+		break;
+	}
+
+	case IOV_SVAL(IOV_DS):
+	{
+		uint32 drvstrn;
+		int status;
+
+		status = sdstd_card_regread(si, 0, SDIOD_CCCR_DRIVER_STRENGTH, 1, &drvstrn);
+		if (status != BCME_OK) {
+			sd_err(("sd_ds error for read SDIOD_CCCR_DRIVER_STRENGTH : 0x%x\n",
+				status));
+			bcmerror = BCME_SDIO_ERROR;
+		} else {
+			sd_err(("sd_ds get cccr driver strength 0x%x\n", drvstrn));
+		}
+
+		if (int_val == 0) {
+			drvstrn = ((drvstrn & 0xf) | 0x0);
+		} else if (int_val == 1) {
+			drvstrn = ((drvstrn & 0xf) | 0x10);
+		} else if (int_val == 2) {
+			drvstrn = ((drvstrn & 0xf) | 0x20);
+		} else if (int_val == 3) {
+			drvstrn = ((drvstrn & 0xf) | 0x30);
+		} else {
+			bcmerror = BCME_BADARG;
+			break;
+		}
+
+		status = sdstd_card_regwrite(si, 0, SDIOD_CCCR_DRIVER_STRENGTH, 1, drvstrn);
+		if (status != BCME_OK) {
+			sd_err(("sd_ds error write SDIOD_CCCR_DRIVER_STRENGTH : 0x%x\n", status));
+		}
+		break;
+	}
 
 	default:
 		bcmerror = BCME_UNSUPPORTED;

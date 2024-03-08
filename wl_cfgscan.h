@@ -228,4 +228,18 @@ int get_roam_channel_list(struct bcm_cfg80211 *cfg, chanspec_t target_chan, chan
 	int n_channels, const wlc_ssid_t *ssid, int ioctl_ver);
 void set_roam_band(int band);
 #endif /* ESCAN_CHANNEL_CACHE */
+
+#ifdef WL11U
+extern bcm_tlv_t * 
+wl_cfg80211_find_interworking_ie(const u8 *parse, u32 len);
+extern s32
+wl_cfg80211_add_iw_ie(struct bcm_cfg80211 *cfg, struct net_device *ndev, s32 bssidx, s32 pktflag,
+	uint8 ie_id, uint8 *data, uint8 data_len);
+extern s32
+wl_cfg80211_clear_iw_ie(struct bcm_cfg80211 *cfg, struct net_device *ndev, s32 bssidx);
+#endif /* WL11U */
+
+#define FW_MAJOR_VER_PFN_CHSPEC_SUPPORTED(ver) \
+	((ver.wlc_ver_major > 12) || \
+	((ver.wlc_ver_major == 12) && (ver.wlc_ver_minor >= 3))) //43756E
 #endif /* _wl_cfgscan_h_ */

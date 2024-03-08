@@ -79,7 +79,7 @@ typedef struct dhd_info {
 	wifi_adapter_info_t *adapter;			/* adapter information, interrupt, fw path etc. */
 	char fw_path[PATH_MAX];		/* path to firmware image */
 	char nv_path[PATH_MAX];		/* path to nvram vars file */
-	char clm_path[PATH_MAX];		/* path to clm vars file */
+	char clm_path[PATH_MAX];	/* path to CLM data */
 	char conf_path[PATH_MAX];	/* path to config vars file */
 	char sig_path[PATH_MAX];	/* path to rtecdc.sig file */
 #ifdef DHD_UCODE_DOWNLOAD
@@ -149,6 +149,10 @@ typedef struct dhd_info {
 	 */
 	struct mutex dhd_net_if_mutex;
 	struct mutex dhd_suspend_mutex;
+#if defined(APF)
+	struct mutex dhd_apf_mutex;
+#endif /* APF */
+#else
 #if defined(APF)
 	struct mutex dhd_apf_mutex;
 #endif /* APF */
@@ -381,8 +385,10 @@ typedef struct dhd_info {
 #if defined(BCMDBUS)
 	struct task_struct *fw_download_task;
 	struct semaphore fw_download_lock;
+	bool fw_download_thread_exit;
 #endif /* BCMDBUS */
 #endif /* defined(BCM_DNGL_EMBEDIMAGE) || defined(BCM_REQUEST_FW) */
+	uint32 flag_kobj;    /* Add for duplicate kobj processing */
 	struct kobject dhd_kobj;
 	timer_list_compat_t timesync_timer;
 #if defined(BT_OVER_SDIO)
@@ -514,18 +520,9 @@ extern uint sssr_enab;
 extern uint fis_enab;
 #endif /* DHD_SSSR_DUMP */
 
-/*
- * Some android arch platforms backported wakelock APIs from kernel 5.4..0
- * Since their minor versions are changed in the Android R OS
- * Added defines for these platforms
- * 4.19.81 -> 4.19.110, 4.14.78 -> 4.14.170
- */
-#if (defined(BOARD_HIKEY) && (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 96))) || \
-	(defined(CONFIG_ARCH_MSM) && (((LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 170)) && \
-	(LINUX_VERSION_CODE < KERNEL_VERSION(4, 15, 0))) || (LINUX_VERSION_CODE >= \
-	KERNEL_VERSION(4, 19, 110))))
+#if defined(ANDROID_VERSION) && (LINUX_VERSION_CODE  >= KERNEL_VERSION(4, 14, 0))
 #define WAKELOCK_BACKPORT
-#endif /* WAKELOCK_BACKPORT */
+#endif
 
 #ifdef CONFIG_HAS_WAKELOCK
 #if ((LINUX_VERSION_CODE  >= KERNEL_VERSION(5, 4, 0)) || defined(WAKELOCK_BACKPORT))

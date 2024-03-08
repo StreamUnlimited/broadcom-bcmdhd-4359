@@ -95,6 +95,9 @@
 #include <linux/interrupt.h>
 #include <linux/kthread.h>
 #include <linux/netdevice.h>
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+#include <net/netdev_rx_queue.h>
+#endif
 #include <linux/time.h>
 #include <linux/rtc.h>
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27))
@@ -973,6 +976,11 @@ static inline struct inode *file_inode(const struct file *f)
 #endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0) */
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0)
+// New google android GKI not allow kernel_write/kernel_read, and use
+// below for temporary overcome, and waiting for get rid of that for future
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
+MODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);
+#endif // LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
 #define vfs_write(fp, buf, len, pos) kernel_write(fp, buf, len, pos)
 #define vfs_read(fp, buf, len, pos) kernel_read(fp, buf, len, pos)
 int kernel_read_compat(struct file *file, loff_t offset, char *addr, unsigned long count);
@@ -1020,6 +1028,10 @@ static inline void do_gettimeofday(struct timeval *tv)
 #define SETFS(fs) BCM_REFERENCE(fs)
 #endif /* LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0) */
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0))
+#include <linux/sched/clock.h>
+#endif /* (LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)) */
+
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0))
 #define PDE_DATA(inode)		pde_data(inode)
 #elif (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0))
@@ -1035,12 +1047,11 @@ static inline void do_gettimeofday(struct timeval *tv)
 #endif /* ANDROID_VERSION >= 13 && KERNEL >= 5.15.41 */
 #endif /* ANDROID_BKPORT */
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 19, 2) || \
-	defined(CFG80211_BKPORT_MLO)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 19, 2) || defined(CFG80211_BKPORT_MLO)
 #define	WDEV_CLIENT(wdev, field)	(wdev->u.client.field)
 #else
-#define	WDEV_CLIENT(wdev, field)		(wdev->field)
-#endif /* LINUX_VER >= 5.19 || CFG80211_BKPORT_MLO */
+#define	WDEV_CLIENT(wdev, field)	(wdev->field)
+#endif /* LINUX_VER >= 5.19.2 || CFG80211_BKPORT_MLO */
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 32)
 #define netdev_tx_t int

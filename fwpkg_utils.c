@@ -24,7 +24,7 @@
 #ifndef BCMDRIVER
 #include <stdio.h>
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 16, 0))
-#include <linux/stdarg.h>
+#include <stdarg.h>
 #endif /* LINUX_VERSION_CODE < KERNEL_VERSION(5, 16, 0) */
 #include <stdlib.h>
 #include <string.h>

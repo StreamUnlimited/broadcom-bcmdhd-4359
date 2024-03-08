@@ -896,7 +896,7 @@ typedef struct osl_timer {
 
 typedef void (*linux_timer_fn)(ulong arg);
 
-extern osl_timer_t * osl_timer_init(osl_t *osh, const char *name, void (*fn)(void *arg), void *arg);
+extern osl_timer_t * osl_timer_init(osl_t *osh, const char *name, void (*fn)(ulong arg), void *arg);
 extern void osl_timer_add(osl_t *osh, osl_timer_t *t, uint32 ms, bool periodic);
 extern void osl_timer_update(osl_t *osh, osl_timer_t *t, uint32 ms, bool periodic);
 extern bool osl_timer_del(osl_t *osh, osl_timer_t *t);
@@ -921,6 +921,15 @@ typedef atomic_t osl_atomic_t;
 #define OSL_ATOMIC_AND(osh, v, x)	atomic_clear_mask(~x, v)
 #endif
 #endif /* BCMDRIVER */
+
+/* kvmalloc was added from kernel ver 4.12 */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 12, 0))
+#define KVZALLOC(size, flags)	kzalloc(size, flags)
+#define KVFREE(osh, addr)	kfree(addr)
+#else
+#define KVZALLOC(size, flags)	kvzalloc(size, flags)
+#define KVFREE(osh, addr)	kvfree(addr)
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(4, 12, 0) */
 
 extern void *osl_spin_lock_init(osl_t *osh);
 extern void osl_spin_lock_deinit(osl_t *osh, void *lock);

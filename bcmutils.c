@@ -24,16 +24,6 @@
 #include <typedefs.h>
 #include <bcmdefs.h>
 
-#if defined(CONFIG_BCMDHD) && defined(__linux__)
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0))
-#include <linux/stdarg.h>
-#else
-#include <stdarg.h>
-#endif /* LINUX_VERSION_CODE */
-#else
-#include <stdarg.h>
-#endif /* CONFIG_BCMDHD && __linux__ */
-
 #ifdef BCMDRIVER
 #include <osl.h>
 #include <bcmutils.h>
@@ -1814,9 +1804,10 @@ BCMFASTPATH(bcm_mwbmap_alloc)(struct bcm_mwbmap * mwbmap_hdl)
 			}
 			MWBMAP_ASSERT(C_bcm_count_leading_zeros(bitmap) ==
 			              bcm_count_leading_zeros(bitmap));
-			bitix    = (BCM_MWBMAP_BITS_WORD - 1)
-				 - bcm_count_leading_zeros(bitmap); /* use asm clz */
-			wordix   = BCM_MWBMAP_MULOP(wordix) + bitix;
+			bitix = bcm_count_leading_zeros(bitmap); /* use asm clz */
+			bitix = (bitix <= (BCM_MWBMAP_BITS_WORD - 1)) ?
+					((BCM_MWBMAP_BITS_WORD - 1) - bitix) : 0;
+			wordix = BCM_MWBMAP_MULOP(wordix) + bitix;
 
 			/* Clear bit if wd count is 0, without conditional branch */
 #if defined(BCM_MWBMAP_USE_CNTSETBITS)

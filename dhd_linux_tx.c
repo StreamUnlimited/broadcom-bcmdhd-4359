@@ -572,8 +572,14 @@ BCMFASTPATH(dhd_start_xmit)(struct sk_buff *skb, struct net_device *net)
 	int cpuid = 0;
 	int prio = 0;
 #endif /* DHD_MQ && DHD_MQ_STATS */
+#if defined(WL_CFG80211)
+	struct bcm_cfg80211 *cfg = wl_get_cfg(net);
+#endif /* defined(WL_CFG80211) */
 
 	DHD_TRACE(("%s: Enter\n", __FUNCTION__));
+#if defined(WL_CFG80211)
+	UNUSED_PARAMETER(cfg);
+#endif /* defined(WL_CFG80211) */
 
 #if defined(DHD_MQ) && defined(DHD_MQ_STATS)
 	qidx = skb_get_queue_mapping(skb);
@@ -726,12 +732,6 @@ BCMFASTPATH(dhd_start_xmit)(struct sk_buff *skb, struct net_device *net)
 	}
 #endif /* !BCM_ROUTER_DHD */
 
-	/* move from dhdsdio_sendfromq(), try to orphan skb early */
-	if (dhd->pub.conf->orphan_move == 2)
-		PKTORPHAN(skb, dhd->pub.conf->tsq);
-	else if (dhd->pub.conf->orphan_move == 3)
-		skb_orphan(skb);
-
 	/* Convert to packet */
 	if (!(pktbuf = PKTFRMNATIVE(dhd->pub.osh, skb))) {
 		DHD_ERROR(("%s: PKTFRMNATIVE failed\n",
@@ -868,7 +868,18 @@ BCMFASTPATH(dhd_start_xmit)(struct sk_buff *skb, struct net_device *net)
 	if (skb->sk) {
 		sk_pacing_shift_update(skb->sk, DHD_DEFAULT_TCP_PACING_SHIFT);
 	}
+#else
+#if defined(BCMPCIE) && defined(DHD_VSDB_SKIP_ORPHAN) && defined(WL_CFG80211)
+	if (!cfg->vsdb_mode)
+#endif /* (BCMPCIE) && (DHD_VSDB_SKIP_ORPHAN) && defined(WL_CFG80211) */
+	skb_orphan(skb);
 #endif /* LINUX_VERSION_CODE >= 4.19.0 && DHD_TCP_PACING_SHIFT */
+
+	/* move from dhdsdio_sendfromq(), try to orphan skb early */
+	if (dhd->pub.conf->orphan_move == 2)
+		PKTORPHAN(skb, dhd->pub.conf->tsq);
+	else if (dhd->pub.conf->orphan_move == 3)
+		skb_orphan(skb);
 
 #ifdef DHDTCPSYNC_FLOOD_BLK
 	if (dhd_tcpdata_get_flag(&dhd->pub, pktbuf) == FLAG_SYNCACK) {
@@ -1160,6 +1171,7 @@ dhd_handle_pktdata(dhd_pub_t *dhdp, int ifidx, void *pkt, uint8 *pktdata, uint32
 	bool verbose_logging = FALSE;
 	dhd_dbg_ring_t *ring;
 	ring = &dhdp->dbg->dbg_rings[PACKET_LOG_RING_ID];
+	UNUSED_PARAMETER(verbose_logging);
 #endif /* DHD_PKT_LOGGING_DBGRING */
 
 	if (!pktdata || pktlen < ETHER_HDR_LEN) {
@@ -1183,6 +1195,13 @@ dhd_handle_pktdata(dhd_pub_t *dhdp, int ifidx, void *pkt, uint8 *pktdata, uint32
 		if (dhd_check_icmpv6(pktdata, pktlen)) {
 			pkt_type = PKT_TYPE_ICMPV6;
 		}
+#ifdef DHD_IPV6_DUMP
+		else if (dhd_check_dhcp6(pktdata, pktlen)) {
+			pkt_type = PKT_TYPE_DHCP6;
+		} else if (dhd_check_dns6(pktdata, pktlen)) {
+			pkt_type = PKT_TYPE_DNS6;
+		}
+#endif
 	}
 	else if (dhd_check_arp(pktdata, ether_type)) {
 		pkt_type = PKT_TYPE_ARP;
@@ -1273,6 +1292,17 @@ dhd_handle_pktdata(dhd_pub_t *dhdp, int ifidx, void *pkt, uint8 *pktdata, uint32
 		case PKT_TYPE_EAP:
 			dhd_send_supp_eap(dhdp, ifidx, pktdata, pktlen, tx, pktfate);
 			break;
+#ifdef DHD_IPV6_DUMP
+		case PKT_TYPE_ICMPV6:
+			dhd_icmpv6_dump(dhdp, ifidx, pktdata, tx, &pkthash, pktfate);
+			break;
+		case PKT_TYPE_DHCP6:
+			dhd_dhcp6_dump(dhdp, ifidx, pktdata, tx, &pkthash, pktfate);
+			break;
+		case PKT_TYPE_DNS6:
+			dhd_dns6_dump(dhdp, ifidx, pktdata, tx, &pkthash, pktfate);
+			break;
+#endif
 		default:
 			break;
 	}

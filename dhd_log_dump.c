@@ -497,7 +497,7 @@ dhd_nla_put_sssr_dump_len(void *ndev, uint32 *arr_len)
 #endif /* DHD_SSSR_DUMP */
 
 uint32
-dhd_get_time_str_len()
+dhd_get_time_str_len(void)
 {
 	char *ts = NULL, time_str[128];
 
@@ -2415,7 +2415,7 @@ clear_debug_dump_time(char *str)
 {
 	memset(str, 0, DEBUG_DUMP_TIME_BUF_LEN);
 }
-#if defined(DHD_PKT_LOGGING)
+#if defined(WL_CFGVENDOR_SEND_HANG_EVENT) || defined(DHD_PKT_LOGGING)
 void
 copy_debug_dump_time(char *dest, char *src)
 {

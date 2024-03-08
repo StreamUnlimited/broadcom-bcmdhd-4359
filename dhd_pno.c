@@ -120,8 +120,6 @@ do { \
 						- (uint32)(timestamp2/1000)))
 #define TIME_DIFF_MS(timestamp1, timestamp2) (abs((uint32)(timestamp1)  \
 						- (uint32)(timestamp2)))
-#define TIMESPEC64_TO_US(ts)  (((ts).tv_sec * USEC_PER_SEC) + \
-						(ts).tv_nsec / NSEC_PER_USEC)
 
 #define ENTRY_OVERHEAD strlen("bssid=\nssid=\nfreq=\nlevel=\nage=\ndist=\ndistSd=\n====")
 #define TIME_MIN_DIFF 5
@@ -805,7 +803,7 @@ _dhd_pno_get_channels(dhd_pub_t *dhd, uint16 *d_chan_list,
 	}
 	for (i = 0, j = 0; i < dtoh32(list->count) && i < *nchan; i++) {
 		if (IS_2G_CHANNEL(dtoh32(list->element[i]))) {
-			if (!(band & WLC_BAND_2G)) {
+			if (!(band & WLC_BAND_2G) && !(band & WLC_BAND_AUTO)) {
 				/* Skip, if not 2g */
 				continue;
 			}
@@ -813,7 +811,7 @@ _dhd_pno_get_channels(dhd_pub_t *dhd, uint16 *d_chan_list,
 		} else if (IS_5G_CHANNEL(dtoh32(list->element[i]))) {
 			bool dfs_channel = is_dfs(dhd, dtoh32(list->element[i]));
 			if ((skip_dfs && dfs_channel) ||
-				(!(band & WLC_BAND_5G) && !dfs_channel)) {
+				(!(band & WLC_BAND_5G) && !(band & WLC_BAND_AUTO) && !dfs_channel)) {
 				/* Skip the channel if:
 				* the DFS bit is NOT set & the channel is a dfs channel
 				* the band 5G is not set & the channel is a non DFS 5G channel
@@ -1022,6 +1020,15 @@ _dhd_pno_cfg(dhd_pub_t *dhd, uint16 *channel_list, int nchan)
 	int err = BCME_OK;
 	int i = 0;
 	wl_pfn_cfg_t pfncfg_param;
+	bool use_chanspec = FALSE;
+	struct bcm_cfg80211 *cfg = wl_get_cfg(dhd_linux_get_primary_netdev(dhd));
+
+	/* When enable 6G, force to use chanspec list */
+	if (FW_SUPPORTED((dhd), 6g) ||
+		(cfg && FW_MAJOR_VER_PNO_CHSPEC_BACK_PORTED(cfg->wlc_ver))) {
+		use_chanspec = TRUE;
+	}
+
 	NULL_CHECK(dhd, "dhd is NULL", err);
 	if (nchan) {
 		if (nchan > WL_NUMCHANNELS) {
@@ -1032,7 +1039,7 @@ _dhd_pno_cfg(dhd_pub_t *dhd, uint16 *channel_list, int nchan)
 		pfncfg_param.channel_num = htod32(0);
 
 		for (i = 0; i < nchan; i++) {
-			if (dhd->wlc_ver_major >= DHD_PNO_CHSPEC_SUPPORT_VER) {
+			if ((dhd->wlc_ver_major >= DHD_PNO_CHSPEC_SUPPORT_VER) || use_chanspec) {
 				pfncfg_param.channel_list[i] = wf_chspec_ctlchspec(channel_list[i]);
 			} else {
 				pfncfg_param.channel_list[i] = channel_list[i];
@@ -3079,7 +3086,8 @@ dhd_pno_get_gscan(dhd_pub_t *dhd, dhd_pno_gscan_cmd_cfg_t type,
 					for (i = 0; i < nchan; i++) {
 						p[i] = wl_channel_to_frequency(
 							(ch_list[i]),
-							CHSPEC_BAND(ch_list[i]));
+							(ch_list[i] <= CH_MAX_2G_CHANNEL?
+							WL_CHANSPEC_BAND_2G : WL_CHANSPEC_BAND_5G));
 					}
 					ret = p;
 					*len = mem_needed;

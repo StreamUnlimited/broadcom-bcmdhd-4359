@@ -157,6 +157,10 @@ extern int wl_get_bandwidth_cap(struct net_device *ndev, uint32 band, uint32 *ba
 extern s32 wl_cfg80211_tdls_mgmt(struct wiphy *wiphy, struct net_device *dev,
 	u8 *peer, u8 action_code, u8 dialog_token, u16 status_code,
 	u32 peer_capability, const u8 *buf, size_t len);
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0))
+extern s32 wl_cfg80211_tdls_mgmt(struct wiphy *wiphy, struct net_device *dev,
+       const u8 *peer, int link_id, u8 action_code, u8 dialog_token, u16 status_code,
+       u32 peer_capability, bool initiator, const u8 *buf, size_t len);
 #elif ((LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0)) && \
 		(LINUX_VERSION_CODE < KERNEL_VERSION(3, 18, 0)))
 extern s32 wl_cfg80211_tdls_mgmt(struct wiphy *wiphy, struct net_device *dev,
@@ -209,7 +213,7 @@ extern s32 wl_cfg80211_stop_ap(struct wiphy *wiphy, struct net_device *dev,
 	unsigned int link_id);
 #else
 extern s32 wl_cfg80211_stop_ap(struct wiphy *wiphy, struct net_device *dev);
-#endif /* CFG80211_BKPORT_MLO */
+#endif /* LINUX_VER >= 5.19.2 || CFG80211_BKPORT_MLO */
 extern s32 wl_cfg80211_change_beacon(struct wiphy *wiphy, struct net_device *dev,
 	struct cfg80211_beacon_data *info);
 #else
@@ -290,4 +294,6 @@ int wl_cfg80211_set_softap_bw(struct bcm_cfg80211 *cfg, uint32 band, uint32 limi
 extern int wl_chspec_chandef(chanspec_t chanspec,
 	struct cfg80211_chan_def *chandef, struct wiphy *wiphy);
 #endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION (3, 8, 0))) */
+extern chanspec_t
+wl_channel_to_chanspec(struct wiphy *wiphy, struct net_device *dev, u32 channel, u32 bw_cap);
 #endif /* _wl_cfgvif_h_ */

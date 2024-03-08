@@ -178,6 +178,12 @@ dhdcdc_query_ioctl(dhd_pub_t *dhd, int ifidx, uint cmd, void *buf, uint len, uin
 		}
 	}
 
+	if (ifidx >= DHD_MAX_IFS) {
+		DHD_ERROR(("%s: IF index %d Invalid for the dongle FW\n",
+			__FUNCTION__, ifidx));
+		return -EIO;
+	}
+
 	memset(msg, 0, sizeof(cdc_ioctl_t));
 
 #ifdef BCMSPI
@@ -292,6 +298,12 @@ dhdcdc_set_ioctl(dhd_pub_t *dhd, int ifidx, uint cmd, void *buf, uint len, uint8
 		}
 #endif /* DHD_PM_OVERRIDE */
 		DHD_TRACE_HW4(("%s: SET PM to %d\n", __FUNCTION__, buf ? *(char *)buf : 0));
+	}
+
+	if (ifidx >= DHD_MAX_IFS) {
+		DHD_ERROR(("%s: IF index %d Invalid for the dongle FW\n",
+			__FUNCTION__, ifidx));
+		return -EIO;
 	}
 
 	memset(msg, 0, sizeof(cdc_ioctl_t));
