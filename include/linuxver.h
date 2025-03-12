@@ -2,7 +2,26 @@
  * Linux-specific abstractions to gain some independence from linux kernel versions.
  * Pave over some 2.2 versus 2.4 versus 2.6 kernel differences.
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2024 Synaptics Incorporated. All rights reserved.
+ *
+ * This software is licensed to you under the terms of the
+ * GNU General Public License version 2 (the "GPL") with Broadcom special exception.
+ *
+ * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
+ * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
+ * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
+ * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
+ * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION
+ * DOES NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES,
+ * SYNAPTICS' TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT
+ * EXCEED ONE HUNDRED U.S. DOLLARS
+ *
+ * Copyright (C) 2024, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -95,6 +114,9 @@
 #include <linux/interrupt.h>
 #include <linux/kthread.h>
 #include <linux/netdevice.h>
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+#include <net/netdev_rx_queue.h>
+#endif
 #include <linux/time.h>
 #include <linux/rtc.h>
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27))
@@ -737,17 +759,24 @@ static inline bool binary_sema_up(tsk_ctl_t *tsk)
 #define SMP_RD_BARRIER_DEPENDS(x) smp_rmb(x)
 #endif
 
+#ifdef BCMPCIE
+#define NAME_SUFFIX "_pcie"
+#else
+#define NAME_SUFFIX "_sdio"
+#endif
+
 #define PROC_START(thread_func, owner, tsk_ctl, flags, name) \
 { \
 	sema_init(&((tsk_ctl)->sema), 0); \
 	init_completion(&((tsk_ctl)->completed)); \
 	init_completion(&((tsk_ctl)->flushed)); \
 	(tsk_ctl)->parent = owner; \
-	(tsk_ctl)->proc_name = name;  \
+	(tsk_ctl)->proc_name = name NAME_SUFFIX;  \
 	(tsk_ctl)->terminated = FALSE; \
 	(tsk_ctl)->flush_ind = FALSE; \
 	(tsk_ctl)->up_cnt = 0; \
-	(tsk_ctl)->p_task  = kthread_run(thread_func, tsk_ctl, (char*)name); \
+	(tsk_ctl)->p_task  = kthread_run(thread_func, \
+		tsk_ctl, "%s%s", (char*)(name), NAME_SUFFIX); \
 	if (IS_ERR((tsk_ctl)->p_task)) { \
 		(tsk_ctl)->thr_pid = -1; \
 		DBG_THR(("%s(): thread:%s create failed\n", __FUNCTION__, \
@@ -973,6 +1002,11 @@ static inline struct inode *file_inode(const struct file *f)
 #endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0) */
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0)
+// New google android GKI not allow kernel_write/kernel_read, and use
+// below for temporary overcome, and waiting for get rid of that for future
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
+MODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);
+#endif // LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
 #define vfs_write(fp, buf, len, pos) kernel_write(fp, buf, len, pos)
 #define vfs_read(fp, buf, len, pos) kernel_read(fp, buf, len, pos)
 int kernel_read_compat(struct file *file, loff_t offset, char *addr, unsigned long count);
@@ -1020,6 +1054,10 @@ static inline void do_gettimeofday(struct timeval *tv)
 #define SETFS(fs) BCM_REFERENCE(fs)
 #endif /* LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0) */
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0))
+#include <linux/sched/clock.h>
+#endif /* (LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)) */
+
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0))
 #define PDE_DATA(inode)		pde_data(inode)
 #elif (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0))
@@ -1039,8 +1077,8 @@ static inline void do_gettimeofday(struct timeval *tv)
 	defined(CFG80211_BKPORT_MLO)
 #define	WDEV_CLIENT(wdev, field)	(wdev->u.client.field)
 #else
-#define	WDEV_CLIENT(wdev, field)		(wdev->field)
-#endif /* LINUX_VER >= 5.19 || CFG80211_BKPORT_MLO */
+#define	WDEV_CLIENT(wdev, field)	(wdev->field)
+#endif /* LINUX_VER >= 5.19.2 || CFG80211_BKPORT_MLO */
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 32)
 #define netdev_tx_t int
@@ -1056,5 +1094,22 @@ static inline void do_gettimeofday(struct timeval *tv)
 #define	PCI_DMA_FROMDEVICE	2
 #endif
 #endif
+
+#if !defined(FREEBSD) && !defined(MACOSX) && !defined(BCM_USE_PLATFORM_STRLCPY)
+#include <bcmstdlib_s.h>
+#else
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 7, 0))
+#define strlcpy(a, b, c)	strscpy(a, b, c)
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(6, 7, 0) */
+#endif /* !defined(FREEBSD) && !defined(MACOSX) && !defined(BCM_USE_PLATFORM_STRLCPY) */
+
+/* DHD_USE_KMEM_CACHE_USERCOPY is to fix for "kernel BUG at mm/usercopy.c:102!" due to
+  * folio_size(folio) is always return PAGE_SIZE(4096) in check_heap_object(), this issue only happened
+  * when CONFIG_HARDENED_USERCOPY enabled and check_heap_object() is modified from kernel 5.19,
+  * so use these 2 conditions to undefine DHD_USE_KMEM_CACHE_USERCOPY
+  */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 19, 0)) || !defined(CONFIG_HARDENED_USERCOPY)
+#undef DHD_USE_KMEM_CACHE_USERCOPY
+#endif /* (LINUX_VERSION_CODE < KERNEL_VERSION(5, 19, 0)) || !defined(CONFIG_HARDENED_USERCOPY) */
 
 #endif /* _linuxver_h_ */

@@ -1,7 +1,26 @@
 /*
  * DHD Linux header file (dhd_linux exports for cfg80211 and other components)
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2024 Synaptics Incorporated. All rights reserved.
+ *
+ * This software is licensed to you under the terms of the
+ * GNU General Public License version 2 (the "GPL") with Broadcom special exception.
+ *
+ * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
+ * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
+ * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
+ * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
+ * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION
+ * DOES NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES,
+ * SYNAPTICS' TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT
+ * EXCEED ONE HUNDRED U.S. DOLLARS
+ *
+ * Copyright (C) 2024, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -238,7 +257,6 @@ typedef struct wifi_adapter_info {
 	const char	*fw_path;
 	const char	*nv_path;
 	const char	*clm_path;
-	const char	*conf_path;
 	void		*wifi_plat_data;	/* wifi ctrl func, for backward compatibility */
 	uint		bus_type;
 	uint		bus_num;
@@ -378,6 +396,35 @@ extern int dhd_get_suspend_bcn_li_dtim(dhd_pub_t *dhd, int *dtim_period, int *bc
 #else
 extern int dhd_get_suspend_bcn_li_dtim(dhd_pub_t *dhd);
 #endif /* OEM_ANDROID && BCMPCIE */
+
+#ifdef CUSTOMER_HW4
+#ifdef MIMO_ANT_SETTING
+#ifdef DHD_EXPORT_CNTL_FILE
+extern unsigned long antsel;
+#endif /* DHD_EXPORT_CNTL_FILE */
+extern int dhd_sel_ant_from_file(dhd_pub_t *dhd);
+#endif /* MIMO_ANT_SETTING */
+#ifdef WRITE_WLANINFO
+#define MAX_VERSION_LEN		512
+#ifdef DHD_EXPORT_CNTL_FILE
+extern char version_info[MAX_VERSION_LEN];
+#endif /* DHD_EXPORT_CNTL_FILE */
+extern uint32 sec_save_wlinfo(char *firm_ver, char *dhd_ver, char *nvram_p, char *clm_ver);
+#endif /* WRITE_WLANINFO */
+#ifdef LOGTRACE_FROM_FILE
+extern int dhd_logtrace_from_file(dhd_pub_t *dhd);
+#ifdef DHD_EXPORT_CNTL_FILE
+extern unsigned long logtrace_val;
+#endif /* DHD_EXPORT_CNTL_FILE */
+#endif /* LOGTRACE_FROM_FILE */
+#ifdef GEN_SOFTAP_INFO_FILE
+#define SOFTAP_INFO_BUF_SZ 512
+#ifdef DHD_EXPORT_CNTL_FILE
+extern char softapinfostr[SOFTAP_INFO_BUF_SZ];
+#endif /* DHD_EXPORT_CNTL_FILE */
+extern uint32 sec_save_softap_info(void);
+#endif /* GEN_SOFTAP_INFO_FILE */
+#endif /* CUSTOMER_HW4 */
 
 #ifdef DHD_SEND_HANG_PRIVCMD_ERRORS
 extern uint32 report_hang_privcmd_err;
@@ -543,6 +590,7 @@ wifi_adapter_info_t* dhd_wifi_platform_get_adapter(uint32 bus_type, uint32 bus_n
 int wifi_platform_set_power(wifi_adapter_info_t *adapter, bool on, unsigned long msec);
 int wifi_platform_bus_enumerate(wifi_adapter_info_t *adapter, bool device_present);
 int wifi_platform_get_irq_number(wifi_adapter_info_t *adapter, unsigned long *irq_flags_ptr);
+extern int wifi_platform_get_irq_level(wifi_adapter_info_t *adapter);
 int wifi_platform_get_mac_addr(wifi_adapter_info_t *adapter, unsigned char *buf, int ifidx);
 #ifdef DHD_COREDUMP
 int wifi_platform_set_coredump(wifi_adapter_info_t *adapter, const char *buf, int buf_len,
@@ -577,6 +625,7 @@ int dhd_net_bus_put(struct net_device *dev);
 #if defined(WLADPS)
 #define ADPS_ENABLE	1
 #define ADPS_DISABLE	0
+#define ADPS_MODE_PM2_ONLY	3
 
 int dhd_enable_adps(dhd_pub_t *dhd, uint8 on);
 #endif
@@ -601,5 +650,8 @@ void dhd_set_platform_ext_name_for_chip_version(char* chip_version);
 #endif /* USE_CID_CHECK */
 #endif /* SUPPORT_MULTIPLE_NVRAM || SUPPORT_MULTIPLE_CLMBLOB */
 void dhd_netif_rx_ni(struct sk_buff * skb);
+#if defined(DBG_PKT_MON) && !defined(PCIE_FULL_DONGLE)
+extern bool dhd_80211_mon_pkt(dhd_pub_t *dhdp, void *pkt, int ifidx);
+#endif /* DBG_PKT_MON */
 
 #endif /* __DHD_LINUX_H__ */

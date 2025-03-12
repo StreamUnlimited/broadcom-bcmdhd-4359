@@ -4,7 +4,26 @@
  * Provides type definitions and function prototypes used to link the
  * DHD OS, bus, and protocol modules.
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2024 Synaptics Incorporated. All rights reserved.
+ *
+ * This software is licensed to you under the terms of the
+ * GNU General Public License version 2 (the "GPL") with Broadcom special exception.
+ *
+ * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
+ * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
+ * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
+ * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
+ * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION
+ * DOES NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES,
+ * SYNAPTICS' TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT
+ * EXCEED ONE HUNDRED U.S. DOLLARS
+ *
+ * Copyright (C) 2024, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -44,7 +63,7 @@ extern void dhd_bus_unregister(void);
 
 /* Download firmware image and nvram image */
 extern int dhd_bus_download_firmware(struct dhd_bus *bus, osl_t *osh,
-	char *fw_path, char *nv_path, char *clm_path, char *conf_path);
+	char *fw_path, char *nv_path);
 #if defined(BT_OVER_SDIO)
 extern int dhd_bus_download_btfw(struct dhd_bus *bus, osl_t *osh, char *btfw_path);
 #endif /* defined (BT_OVER_SDIO) */
@@ -272,6 +291,11 @@ extern void dhd_bus_handle_mb_data(struct dhd_bus *bus, uint32 d2h_mb_data);
 /* dump the device trap informtation  */
 extern void dhd_bus_dump_trap_info(struct dhd_bus *bus, struct bcmstrbuf *b);
 extern void dhd_bus_copy_trap_sig(struct dhd_bus *bus,  trap_t *tr);
+#ifdef WL_CFGVENDOR_SEND_HANG_EVENT
+void copy_hang_info_linkdown(dhd_pub_t *dhd);
+void copy_ext_trap_sig(dhd_pub_t *dhd, trap_t *tr);
+void copy_hang_info_trap(dhd_pub_t *dhd);
+#endif /* WL_CFGVENDOR_SEND_HANG_EVENT */
 
 /* Function to set default min res mask */
 extern bool dhd_bus_set_default_min_res_mask(struct dhd_bus *bus);
@@ -423,5 +447,7 @@ void * dhd_bus_get_socram_buf(struct dhd_bus *bus, struct dhd_pub *dhdp);
 #endif
 
 void dhd_bus_set_signature_path(struct dhd_bus *bus, char *sig_path);
+
+int dhdsdio_mpdu_init(dhd_pub_t *dhdp);
 
 #endif /* _dhd_bus_h_ */

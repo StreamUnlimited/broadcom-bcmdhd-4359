@@ -1,7 +1,26 @@
 /*
  * Linux DHD Bus Module for PCIE
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2024 Synaptics Incorporated. All rights reserved.
+ *
+ * This software is licensed to you under the terms of the
+ * GNU General Public License version 2 (the "GPL") with Broadcom special exception.
+ *
+ * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
+ * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
+ * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
+ * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
+ * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION
+ * DOES NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES,
+ * SYNAPTICS' TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT
+ * EXCEED ONE HUNDRED U.S. DOLLARS
+ *
+ * Copyright (C) 2024, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -104,6 +123,10 @@ unsigned char gpio_direction = 0;
 #define BCMPCI_DEV_ID PCI_ANY_ID
 #endif
 
+#ifndef SYNAPCI_DEV_ID
+#define SYNAPCI_DEV_ID PCI_ANY_ID
+#endif
+
 #ifdef FORCE_TPOWERON
 extern uint32 tpoweron_scale;
 #endif /* FORCE_TPOWERON */
@@ -159,6 +182,7 @@ typedef struct dhdpcie_os_info {
 	bool			oob_irq_wake_enabled;
 	spinlock_t		oob_irq_spinlock;
 	void			*dev;		/* handle to the underlying device */
+	void			*adapter;
 } dhdpcie_os_info_t;
 static irqreturn_t wlan_oob_irq(int irq, void *data);
 #endif /* BCMPCIE_OOB_HOST_WAKE */
@@ -220,6 +244,20 @@ static struct pci_device_id dhdpcie_pci_devid[] __devinitdata = {
 	class: PCI_CLASS_NETWORK_OTHER << 8,
 	class_mask: 0xffff00,
 	driver_data: 0,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0))
+	override_only: 0,
+#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)) */
+	},
+	{ vendor: VENDOR_SYNAPTICS,
+	device: BCMPCI_DEV_ID,
+	subvendor: PCI_ANY_ID,
+	subdevice: PCI_ANY_ID,
+	class: PCI_CLASS_NETWORK_OTHER << 8,
+	class_mask: 0xffff00,
+	driver_data: 0,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0))
+	override_only: 0,
+#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)) */
 	},
 #if (BCMPCI_DEV_ID != PCI_ANY_ID) && defined(BCMPCI_NOOTP_DEV_ID)
 	{ vendor: VENDOR_BROADCOM,
@@ -229,9 +267,16 @@ static struct pci_device_id dhdpcie_pci_devid[] __devinitdata = {
 	class: PCI_CLASS_NETWORK_OTHER << 8,
 	class_mask: 0xffff00,
 	driver_data: 0,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0))
+	override_only: 0,
+#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)) */
 	},
 #endif /* BCMPCI_DEV_ID != PCI_ANY_ID && BCMPCI_NOOTP_DEV_ID */
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0))
+	{ 0, 0, 0, 0, 0, 0, 0, 0}
+#else
 	{ 0, 0, 0, 0, 0, 0, 0}
+#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)) */
 };
 MODULE_DEVICE_TABLE(pci, dhdpcie_pci_devid);
 
@@ -252,8 +297,10 @@ static const struct dev_pm_ops dhd_pcie_pm_ops = {
 #endif
 
 static struct pci_driver dhdpcie_driver = {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 8, 0))
 	node:		{&dhdpcie_driver.node, &dhdpcie_driver.node},
-	name:		"pcieh"BUS_TYPE,
+#endif /* LINUX_VERSION_CODE < 6.8.0 */
+	name:		"pcieh"ADAPTER_IDX_STR,
 	id_table:	dhdpcie_pci_devid,
 	probe:		dhdpcie_pci_probe,
 	remove:		dhdpcie_pci_remove,
@@ -702,6 +749,7 @@ static int dhdpcie_pci_suspend(struct device *dev)
 	int timeleft = 0;
 	uint bitmask = 0xFFFFFFFF;
 
+	printf("%s: Enter\n", __FUNCTION__);
 	if (pch) {
 		bus = pch->bus;
 	}
@@ -709,6 +757,9 @@ static int dhdpcie_pci_suspend(struct device *dev)
 		return ret;
 	}
 
+#ifdef DEVICE_PM_CALLBACK
+	dhd_pm_callback(bus->dhd, 1, NULL);
+#endif /* DEVICE_PM_CALLBACK */
 #if defined(DEVICE_TX_STUCK_DETECT) && defined(ASSOC_CHECK_SR)
 	dhd_assoc_check_sr(bus->dhd, TRUE);
 #endif /* DEVICE_TX_STUCK_DETECT && ASSOC_CHECK_SR */
@@ -724,7 +775,8 @@ static int dhdpcie_pci_suspend(struct device *dev)
 		if ((timeleft == 0) || (timeleft == 1)) {
 			DHD_ERROR(("%s: Timed out dhd_bus_busy_state=0x%x\n",
 				__FUNCTION__, bus->dhd->dhd_bus_busy_state));
-			return -EBUSY;
+			ret = -EBUSY;
+			goto exit;
 		}
 	} else {
 		DHD_BUS_BUSY_SET_SUSPEND_IN_PROGRESS(bus->dhd);
@@ -738,10 +790,20 @@ static int dhdpcie_pci_suspend(struct device *dev)
 	if (!bus->dhd->dongle_reset)
 		ret = dhdpcie_set_suspend_resume(bus, TRUE);
 
+exit:
 	DHD_GENERAL_LOCK(bus->dhd, flags);
+	if (ret)
+		bus->dhd->hostsleep = HOSTSLEEP_CLEAR;
+	else
+		bus->dhd->hostsleep = HOSTSLEEP_DHD_SET;
 	DHD_BUS_BUSY_CLEAR_SUSPEND_IN_PROGRESS(bus->dhd);
 	dhd_os_busbusy_wake(bus->dhd);
+	printf("%s: Exit ret=%d\n", __FUNCTION__, ret);
 	DHD_GENERAL_UNLOCK(bus->dhd, flags);
+#ifdef DEVICE_PM_CALLBACK
+	if (ret)
+		dhd_pm_callback(bus->dhd, 0, NULL);
+#endif /* DEVICE_PM_CALLBACK */
 
 	return ret;
 }
@@ -808,6 +870,7 @@ static int dhdpcie_pci_resume(struct device *dev)
 	dhd_bus_t *bus = NULL;
 	unsigned long flags;
 
+	printf("%s: Enter\n", __FUNCTION__);
 	if (pch) {
 		bus = pch->bus;
 	}
@@ -823,9 +886,14 @@ static int dhdpcie_pci_resume(struct device *dev)
 		ret = dhdpcie_set_suspend_resume(bus, FALSE);
 
 	DHD_GENERAL_LOCK(bus->dhd, flags);
+	bus->dhd->hostsleep = HOSTSLEEP_CLEAR;
 	DHD_BUS_BUSY_CLEAR_RESUME_IN_PROGRESS(bus->dhd);
 	dhd_os_busbusy_wake(bus->dhd);
+	printf("%s: Exit ret=%d\n", __FUNCTION__, ret);
 	DHD_GENERAL_UNLOCK(bus->dhd, flags);
+#ifdef DEVICE_PM_CALLBACK
+	dhd_pm_callback(bus->dhd, 0, NULL);
+#endif /* DEVICE_PM_CALLBACK */
 #if defined(DEVICE_TX_STUCK_DETECT) && defined(ASSOC_CHECK_SR)
 	dhd_assoc_check_sr(bus->dhd, FALSE);
 #endif /* DEVICE_TX_STUCK_DETECT && ASSOC_CHECK_SR */
@@ -1398,13 +1466,13 @@ static int dhdpcie_device_scan(struct device *dev, void *data)
 	pcidev = container_of(dev, struct pci_dev, dev);
 	GCC_DIAGNOSTIC_POP();
 
-	if (pcidev->vendor != 0x14e4)
+	if ((pcidev->vendor != VENDOR_BROADCOM) && (pcidev->vendor != VENDOR_SYNAPTICS))
 		return 0;
 
-	DHD_INFO(("Found Broadcom PCI device 0x%04x\n", pcidev->device));
+	DHD_INFO(("Found Broadcom or Synaptics PCI device 0x%04x\n", pcidev->device));
 	*cnt += 1;
 	if (pcidev->driver && strcmp(pcidev->driver->name, dhdpcie_driver.name))
-		DHD_ERROR(("Broadcom PCI Device 0x%04x has allocated with driver %s\n",
+		DHD_ERROR(("Broadcom or Synaptics PCI Device 0x%04x has allocated with driver %s\n",
 			pcidev->device, pcidev->driver->name));
 
 	return 0;
@@ -1418,7 +1486,7 @@ dhdpcie_bus_register(void)
 	if (!(error = pci_register_driver(&dhdpcie_driver))) {
 		bus_for_each_dev(dhdpcie_driver.driver.bus, NULL, &error, dhdpcie_device_scan);
 		if (!error) {
-			DHD_ERROR(("No Broadcom PCI device enumerated!\n"));
+			DHD_ERROR(("No Broadcom or Synaptics PCI device enumerated!\n"));
 #ifdef DHD_PRELOAD
 			return 0;
 #endif
@@ -1569,6 +1637,9 @@ dhdpcie_pci_stop(struct pci_dev *pdev)
 	osl_t *osh = NULL;
 	dhdpcie_info_t *pch = NULL;
 	dhd_bus_t *bus = NULL;
+#ifdef RMMOD_POWER_DOWN_LATER
+	wifi_adapter_info_t	*adapter = NULL;
+#endif
 
 	DHD_TRACE(("%s Enter\n", __FUNCTION__));
 	pch = pci_get_drvdata(pdev);
@@ -1587,13 +1658,20 @@ dhdpcie_pci_stop(struct pci_dev *pdev)
 		dhdpcie_bus_release(bus);
 	}
 
+#ifdef RMMOD_POWER_DOWN_LATER
 	/*
 	 * For module type driver,
 	 * it needs to back up configuration space before rmmod
 	 * Since original backed up configuration space won't be restored if state_saved = false
 	 * This back up the configuration space again & state_saved = true
 	 */
-	pci_save_state(pdev);
+	adapter = dhd_wifi_platform_get_adapter(PCI_BUS, pdev->bus->number,
+		PCI_SLOT(pdev->devfn));
+	if ((adapter && adapter->gpio_wl_reg_on < 0) || is_power_on)
+		pci_save_state(pdev);
+	else
+		DHD_ERROR(("%s skip pci_save_state()\n", __FUNCTION__));
+#endif
 
 	if (pci_is_enabled(pdev))
 		pci_disable_device(pdev);
@@ -1991,6 +2069,7 @@ int dhdpcie_init(struct pci_dev *pdev)
 		if (dhdpcie_osinfo->oob_irq_num < 0) {
 			DHD_ERROR(("%s: Host OOB irq is not defined\n", __FUNCTION__));
 		}
+		dhdpcie_osinfo->adapter = adapter;
 #endif /* BCMPCIE_OOB_HOST_WAKE */
 
 #ifdef USE_SMMU_ARCH_MSM
@@ -2639,15 +2718,32 @@ extern int dhd_get_wlan_oob_gpio_number(void);
 #endif /* PRINT_WAKEUP_GPIO_STATUS */
 #endif /* CONFIG_BCMDHD_GET_OOB_STATE */
 
-int dhdpcie_get_oob_irq_level(void)
+int dhdpcie_get_oob_irq_level(struct dhd_bus *bus)
 {
-	int gpio_level;
+	int                   gpio_level = BCME_UNSUPPORTED;
+	dhdpcie_info_t       *pch = NULL;
+	dhdpcie_os_info_t    *dhdpcie_osinfo = NULL;
+	wifi_adapter_info_t  *adapter = NULL;
 
-#ifdef CONFIG_BCMDHD_GET_OOB_STATE
-	gpio_level = dhd_get_wlan_oob_gpio();
-#else
-	gpio_level = BCME_UNSUPPORTED;
-#endif /* CONFIG_BCMDHD_GET_OOB_STATE */
+	if (bus == NULL) {
+		DHD_ERROR(("%s: bus is NULL\n", __FUNCTION__));
+		return BCME_BADARG;
+	} else if (bus->dev == NULL) {
+		DHD_ERROR(("%s: bus->dev is NULL\n", __FUNCTION__));
+		return BCME_BADARG;
+	} else if ((pch = pci_get_drvdata(bus->dev)) == NULL) {
+		DHD_ERROR(("%s: pch is NULL\n", __FUNCTION__));
+		return BCME_BADARG;
+	} else if ((dhdpcie_osinfo = (dhdpcie_os_info_t *)pch->os_cxt) == NULL) {
+		DHD_ERROR(("%s: dhdpcie_osinfo is NULL\n", __FUNCTION__));
+		return BCME_BADARG;
+	} else if ((adapter = dhdpcie_osinfo->adapter) == NULL) {
+		DHD_ERROR(("%s: adapter is NULL\n", __FUNCTION__));
+		return BCME_BADARG;
+	} else {
+		gpio_level = wifi_platform_get_irq_level(adapter);
+	}
+
 	return gpio_level;
 }
 #ifdef PRINT_WAKEUP_GPIO_STATUS
@@ -2839,11 +2935,11 @@ int dhdpcie_oob_intr_register(dhd_bus_t *bus)
 #ifdef DHD_USE_PCIE_OOB_THREADED_IRQ
 		err = request_threaded_irq(dhdpcie_osinfo->oob_irq_num,
 			wlan_oob_irq_isr, wlan_oob_irq,
-			dhdpcie_osinfo->oob_irq_flags, "dhdpcie_host_wake",
+			dhdpcie_osinfo->oob_irq_flags, "dhdpcie_host_wake"ADAPTER_IDX_STR,
 			bus);
 #else
 		err = request_irq(dhdpcie_osinfo->oob_irq_num, wlan_oob_irq,
-			dhdpcie_osinfo->oob_irq_flags, "dhdpcie_host_wake",
+			dhdpcie_osinfo->oob_irq_flags, "dhdpcie_host_wake"ADAPTER_IDX_STR,
 			bus);
 #endif /* DHD_USE_THREADED_IRQ_PCIE_OOB */
 		if (err) {

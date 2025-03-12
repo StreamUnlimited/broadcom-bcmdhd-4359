@@ -1,7 +1,26 @@
 /*
  * Linux DHD Bus Module for PCIE
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2024 Synaptics Incorporated. All rights reserved.
+ *
+ * This software is licensed to you under the terms of the
+ * GNU General Public License version 2 (the "GPL") with Broadcom special exception.
+ *
+ * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
+ * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
+ * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
+ * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
+ * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION
+ * DOES NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES,
+ * SYNAPTICS' TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT
+ * EXCEED ONE HUNDRED U.S. DOLLARS
+ *
+ * Copyright (C) 2024, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -153,7 +172,7 @@ typedef struct _dhd_ds_trace_t {
 
 #define PCIE_FASTLPO_ENABLED(buscorerev) \
 	((buscorerev == 66) || (buscorerev == 67) || (buscorerev == 68) || \
-	(buscorerev == 70) || (buscorerev == 72) || (buscorerev == 76))
+	(buscorerev == 70) || (buscorerev == 72) || (buscorerev == 76) || (buscorerev == 77))
 
 /*
  * HW JIRA - CRWLPCIEGEN2-672
@@ -786,7 +805,7 @@ extern void dhdpcie_oob_intr_unregister(dhd_bus_t *bus);
 extern void dhdpcie_oob_intr_set(dhd_bus_t *bus, bool enable);
 extern int dhdpcie_get_oob_irq_num(struct dhd_bus *bus);
 extern int dhdpcie_get_oob_irq_status(struct dhd_bus *bus);
-extern int dhdpcie_get_oob_irq_level(void);
+extern int dhdpcie_get_oob_irq_level(struct dhd_bus *bus);
 #ifdef PRINT_WAKEUP_GPIO_STATUS
 extern int dhdpcie_get_oob_gpio_number(void);
 #endif /* PRINT_WAKEUP_GPIO_STATUS */

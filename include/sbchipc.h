@@ -5,7 +5,26 @@
  * JTAG, 0/1/2 UARTs, clock frequency control, a watchdog interrupt timer,
  * GPIO interface, extbus, and support for serial and parallel flashes.
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2024 Synaptics Incorporated. All rights reserved.
+ *
+ * This software is licensed to you under the terms of the
+ * GNU General Public License version 2 (the "GPL") with Broadcom special exception.
+ *
+ * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
+ * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
+ * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
+ * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
+ * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION
+ * DOES NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES,
+ * SYNAPTICS' TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT
+ * EXCEED ONE HUNDRED U.S. DOLLARS
+ *
+ * Copyright (C) 2024, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -2825,6 +2844,8 @@ typedef volatile struct {
 #define PMU4369_PLL6VAL_PRE_SCALE		(1 << 17)
 #define PMU4369_PLL6VAL_POST_SCALE		(1 << 3)
 
+#define PMU_PLL_CTRL_REG6      6
+
 /* PLL usage in 4378
 * Temporay setting, update is needed.
 */
@@ -3262,6 +3283,9 @@ typedef volatile struct {
 #define PMU1_PLL0_SWITCH_MACCLOCK_160MHZ			(1)
 #define PMU1_PLL0_PC1_M2DIV_VALUE_120MHZ			8
 #define PMU1_PLL0_PC1_M2DIV_VALUE_160MHZ			6
+
+#define RES4381_ARMCLK_AVAIL		0x8000000	/* #27 bit */
+#define RES4381_HT_AVAIL		0x10000000	/* #28 bit */
 
 /* 4369 Related */
 
@@ -4237,10 +4261,12 @@ typedef volatile struct {
 #define CR4_43751_RAM_BASE                   (0x170000)
 #define CR4_43752_RAM_BASE                   (0x170000)
 #define CR4_43756_RAM_BASE                   (0x170000)
+#define CR4_43711_RAM_BASE                   (0x170000)
 #define CR4_4376_RAM_BASE                    (0x352000)
 #define CR4_4378_RAM_BASE                    (0x352000)
 #define CR4_4381_RAM_BASE                    (0x740000)
 #define CR4_4382_RAM_BASE                    (0x700000)
+#define CR4_4383_RAM_BASE                    (0x6E0000)
 #define CR4_4387_RAM_BASE                    (0x740000)
 #define CR4_4385_RAM_BASE                    (0x740000)
 #define CA7_4388_RAM_BASE                    (0x200000)

@@ -1,7 +1,26 @@
 /*
  * Linux cfg80211 driver - Android related functions
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2024 Synaptics Incorporated. All rights reserved.
+ *
+ * This software is licensed to you under the terms of the
+ * GNU General Public License version 2 (the "GPL") with Broadcom special exception.
+ *
+ * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
+ * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
+ * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
+ * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
+ * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION
+ * DOES NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES,
+ * SYNAPTICS' TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT
+ * EXCEED ONE HUNDRED U.S. DOLLARS
+ *
+ * Copyright (C) 2024, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -82,10 +101,6 @@
 #ifdef WL_TWT
 #include <802.11ah.h>
 #endif /* WL_TWT */
-
-#ifdef WL_STATIC_IF
-#define WL_BSSIDX_MAX	16
-#endif /* WL_STATIC_IF */
 /*
  * Android private command strings, PLEASE define new private commands here
  * so they can be updated easily in the future (if needed)
@@ -592,9 +607,6 @@ static int wlc_wbtext_get_roam_prof(struct net_device *ndev, wl_roamprof_band_t 
 	uint8 band, uint8 *roam_prof_ver, uint8 *roam_prof_size);
 #endif /* WBTEXT */
 #ifdef WES_SUPPORT
-#ifdef WBTEXT
-static int wl_android_wbtext_enable(struct net_device *dev, int mode);
-#endif /* WBTEXT */
 /* wl_roam.c */
 extern int get_roamscan_mode(struct net_device *dev, int *mode);
 extern int set_roamscan_mode(struct net_device *dev, int mode);
@@ -602,44 +614,6 @@ extern int get_roamscan_chanspec_list(struct net_device *dev, chanspec_t *chansp
 extern int set_roamscan_chanspec_list(struct net_device *dev, uint n, chanspec_t *chanspecs);
 extern int add_roamscan_chanspec_list(struct net_device *dev, uint n, chanspec_t *chanspecs);
 
-static char* legacy_cmdlist[] =
-{
-	CMD_GETROAMSCANCHLEGACY, CMD_ADDROAMSCANCHLEGACY,
-	CMD_GETROAMSCANFQLEGACY, CMD_ADDROAMSCANFQLEGACY,
-	CMD_GETROAMTRIGLEGACY, CMD_SETROAMTRIGLEGACY,
-	CMD_REASSOCLEGACY, CMD_REASSOCFREQLEGACY,
-	CMD_GETSCANCHANNELTIMELEGACY, CMD_SETSCANCHANNELTIMELEGACY,
-	CMD_GETSCANUNASSOCTIMELEGACY, CMD_SETSCANUNASSOCTIMELEGACY,
-	CMD_GETSCANPASSIVETIMELEGACY, CMD_SETSCANPASSIVETIMELEGACY,
-	CMD_GETSCANHOMETIMELEGACY, CMD_SETSCANHOMETIMELEGACY,
-	CMD_GETSCANHOMEAWAYTIMELEGACY, CMD_SETSCANHOMEAWAYTIMELEGACY,
-	"\0"
-};
-
-static char* ncho_cmdlist[] =
-{
-	CMD_ROAMTRIGGER_GET, CMD_ROAMTRIGGER_SET,
-	CMD_ROAMDELTA_GET, CMD_ROAMDELTA_SET,
-	CMD_ROAMSCANPERIOD_GET, CMD_ROAMSCANPERIOD_SET,
-	CMD_FULLROAMSCANPERIOD_GET, CMD_FULLROAMSCANPERIOD_SET,
-	CMD_COUNTRYREV_GET, CMD_COUNTRYREV_SET,
-	CMD_GETROAMSCANCONTROL,	CMD_SETROAMSCANCONTROL,
-	CMD_GETROAMSCANCHANNELS, CMD_SETROAMSCANCHANNELS, CMD_ADDROAMSCANCHANNELS,
-	CMD_GETROAMSCANFREQS, CMD_SETROAMSCANFREQS, CMD_ADDROAMSCANFREQS,
-	CMD_SENDACTIONFRAME,
-	CMD_REASSOC, CMD_REASSOCFREQ,
-	CMD_GETSCANCHANNELTIME,	CMD_SETSCANCHANNELTIME,
-	CMD_GETSCANUNASSOCTIME,	CMD_SETSCANUNASSOCTIME,
-	CMD_GETSCANPASSIVETIME,	CMD_SETSCANPASSIVETIME,
-	CMD_GETSCANHOMETIME, CMD_SETSCANHOMETIME,
-	CMD_GETSCANHOMEAWAYTIME, CMD_SETSCANHOMEAWAYTIME,
-	CMD_GETSCANNPROBES, CMD_SETSCANNPROBES,
-	CMD_GETDFSSCANMODE,
-	CMD_SETJOINPREFER,
-	CMD_GETWESMODE,	CMD_SETWESMODE,
-	CMD_GETROAMALLOWBAND, CMD_SETROAMALLOWBAND,
-	"\0"
-};
 #endif /* WES_SUPPORT */
 #ifdef ROAM_CHANNEL_CACHE
 extern void wl_update_roamscan_cache_by_band(struct net_device *dev, int band);
@@ -661,117 +635,6 @@ extern char iface_name[IFNAMSIZ];
 #ifdef DHD_PM_CONTROL_FROM_FILE
 extern bool g_pm_control;
 #endif	/* DHD_PM_CONTROL_FROM_FILE */
-
-/* private command support for restoring roam/scan parameters */
-#if defined(SUPPORT_RESTORE_SCAN_PARAMS) || defined(WES_SUPPORT)
-#define CMD_RESTORE_SCAN_PARAMS "RESTORE_SCAN_PARAMS"
-
-typedef int (*PRIV_CMD_HANDLER) (struct net_device *dev, char *command);
-typedef int (*PRIV_CMD_HANDLER_WITH_LEN) (struct net_device *dev, char *command, int total_len);
-
-enum {
-	RESTORE_TYPE_UNSPECIFIED = 0,
-	RESTORE_TYPE_PRIV_CMD = 1,
-	RESTORE_TYPE_PRIV_CMD_WITH_LEN = 2
-};
-
-typedef struct android_restore_scan_params {
-	char command[64];
-	int parameter;
-	int cmd_type;
-	union {
-		PRIV_CMD_HANDLER cmd_handler;
-		PRIV_CMD_HANDLER_WITH_LEN cmd_handler_w_len;
-	};
-} android_restore_scan_params_t;
-
-/* function prototypes of private command handler */
-int wl_android_default_set_scan_params(struct net_device *dev, char *command, int total_len);
-static int wl_android_set_roam_trigger(struct net_device *dev, char* command);
-int wl_android_set_roam_delta(struct net_device *dev, char* command);
-int wl_android_set_roam_scan_period(struct net_device *dev, char* command);
-int wl_android_set_full_roam_scan_period(struct net_device *dev, char* command);
-int wl_android_set_roam_scan_control(struct net_device *dev, char *command);
-int wl_android_set_scan_channel_time(struct net_device *dev, char *command);
-int wl_android_set_scan_home_time(struct net_device *dev, char *command);
-int wl_android_set_scan_home_away_time(struct net_device *dev, char *command);
-int wl_android_set_scan_nprobes(struct net_device *dev, char *command);
-static int wl_android_set_band(struct net_device *dev, char *command);
-int wl_android_set_wes_mode(struct net_device *dev, char *command);
-int wl_android_set_okc_mode(struct net_device *dev, char *command);
-int wl_android_set_scan_passive_time(struct net_device *dev, char *command);
-int wl_android_set_roam_allowed_band(struct net_device *dev, char *command);
-
-/* default values */
-#ifdef ROAM_API
-#define DEFAULT_ROAM_TIRGGER	-75
-#define DEFAULT_ROAM_DELTA	10
-#define DEFAULT_ROAMSCANPERIOD	10
-#define DEFAULT_FULLROAMSCANPERIOD_SET	120
-#endif /* ROAM_API */
-#ifdef WES_SUPPORT
-#define DEFAULT_ROAMSCANCONTROL	0
-#define DEFAULT_SCANCHANNELTIME	40
-#ifdef BCM4361_CHIP
-#define DEFAULT_SCANHOMETIME	60
-#else
-#define DEFAULT_SCANHOMETIME	45
-#endif /* BCM4361_CHIP */
-#define DEFAULT_SCANPROBES		2
-#define DEFAULT_DFSSCANMODE		1
-#define DEFAULT_WESMODE			0
-#define DEFAULT_OKCMODE			1
-#endif /* WES_SUPPORT */
-#define DEFAULT_BAND		0
-#ifdef WBTEXT
-#define DEFAULT_WBTEXT_ENABLE	1
-#endif /* WBTEXT */
-
-/* restoring parameter list, please don't change order */
-static android_restore_scan_params_t restore_params[] =
-{
-/* wbtext need to be disabled while updating roam/scan parameters */
-#ifdef WBTEXT
-	{ CMD_WBTEXT_ENABLE, 0, RESTORE_TYPE_PRIV_CMD_WITH_LEN,
-		.cmd_handler_w_len = wl_android_wbtext},
-#endif /* WBTEXT */
-#ifdef ROAM_API
-	{ CMD_ROAMTRIGGER_SET, DEFAULT_ROAM_TIRGGER,
-		RESTORE_TYPE_PRIV_CMD, .cmd_handler = wl_android_set_roam_trigger},
-	{ CMD_ROAMDELTA_SET, DEFAULT_ROAM_DELTA,
-		RESTORE_TYPE_PRIV_CMD, .cmd_handler = wl_android_set_roam_delta},
-	{ CMD_ROAMSCANPERIOD_SET, DEFAULT_ROAMSCANPERIOD,
-		RESTORE_TYPE_PRIV_CMD, .cmd_handler = wl_android_set_roam_scan_period},
-	{ CMD_FULLROAMSCANPERIOD_SET, DEFAULT_FULLROAMSCANPERIOD_SET,
-		RESTORE_TYPE_PRIV_CMD, .cmd_handler = wl_android_set_full_roam_scan_period},
-#endif /* ROAM_API */
-#ifdef WES_SUPPORT
-	{ CMD_SETROAMSCANCONTROL, DEFAULT_ROAMSCANCONTROL,
-		RESTORE_TYPE_PRIV_CMD, .cmd_handler = wl_android_set_roam_scan_control},
-	{ CMD_SETSCANCHANNELTIME, DEFAULT_SCANCHANNELTIME,
-		RESTORE_TYPE_PRIV_CMD, .cmd_handler = wl_android_set_scan_channel_time},
-	{ CMD_SETSCANHOMETIME, DEFAULT_SCANHOMETIME,
-		RESTORE_TYPE_PRIV_CMD, .cmd_handler = wl_android_set_scan_home_time},
-	{ CMD_GETSCANHOMEAWAYTIME, DHD_SCAN_HOME_AWAY_TIME,
-		RESTORE_TYPE_PRIV_CMD, .cmd_handler = wl_android_set_scan_home_away_time},
-	{ CMD_SETSCANNPROBES, DEFAULT_SCANPROBES,
-		RESTORE_TYPE_PRIV_CMD, .cmd_handler = wl_android_set_scan_nprobes},
-	{ CMD_SETWESMODE, DEFAULT_WESMODE,
-		RESTORE_TYPE_PRIV_CMD, .cmd_handler = wl_android_set_wes_mode},
-	{ CMD_SETSCANPASSIVETIME, DHD_SCAN_PASSIVE_TIME,
-		RESTORE_TYPE_PRIV_CMD, .cmd_handler = wl_android_set_scan_passive_time},
-	{ CMD_SETROAMALLOWBAND, WLC_ROAM_ALLOW_BAND_AUTO,
-		RESTORE_TYPE_PRIV_CMD, .cmd_handler = wl_android_set_roam_allowed_band},
-#endif /* WES_SUPPORT */
-	{ CMD_SETBAND, DEFAULT_BAND,
-		RESTORE_TYPE_PRIV_CMD, .cmd_handler = wl_android_set_band},
-#ifdef WBTEXT
-	{ CMD_WBTEXT_ENABLE, DEFAULT_WBTEXT_ENABLE,
-		RESTORE_TYPE_PRIV_CMD_WITH_LEN, .cmd_handler_w_len = wl_android_wbtext},
-#endif /* WBTEXT */
-	{ "\0", 0, RESTORE_TYPE_UNSPECIFIED, .cmd_handler = NULL}
-};
-#endif /* SUPPORT_RESTORE_SCAN_PARAMS || WES_SUPPORT */
 
 #ifdef SUPPORT_LATENCY_CRITICAL_DATA
 #define CMD_GET_LATENCY_CRITICAL_DATA	"GET_LATENCY_CRT_DATA"
@@ -1391,13 +1254,17 @@ wl_android_get_band(struct net_device *dev, char *command, int total_len)
 	struct bcm_cfg80211 *cfg = wl_get_cfg(dev);
 #endif /* WL_6G_BAND */
 
+#ifdef WL_IF_BAND
 	error = wldev_iovar_getint(dev, "if_band", &band);
 	if (error == BCME_UNSUPPORTED) {
+#endif /* WL_IF_BAND */
 		error = wldev_get_band(dev, &band);
 		if (error) {
 			return BCME_ERROR;
 		}
+#ifdef WL_IF_BAND
 	}
+#endif /* WL_IF_BAND */
 
 	/* Changed Band types to Band Definition */
 	switch (band) {
@@ -1489,14 +1356,6 @@ wl_android_set_band(struct net_device *dev, char *command)
 #endif /* ROAM_CHANNEL_CACHE */
 	return error;
 }
-
-#if defined(WES_SUPPORT) && defined(WBTEXT)
-static bool wl_android_check_wbtext_support(struct net_device *dev)
-{
-	dhd_pub_t *dhdp = wl_cfg80211_get_dhdp(dev);
-	return dhdp->wbtext_support;
-}
-#endif /* WES_SUPPORT && WBTEXT */
 
 int
 wl_android_rcroam_turn_on(struct net_device *dev, int rcroam_enab)
@@ -1602,27 +1461,6 @@ static int wl_android_wbtext(struct net_device *dev, char *command, int total_le
 	}
 	return error;
 }
-
-#ifdef WES_SUPPORT
-static int
-wl_android_wbtext_enable(struct net_device *dev, int mode)
-{
-	int error = BCME_OK;
-	char commandp[WLC_IOCTL_SMLEN];
-
-	if (wl_android_check_wbtext_support(dev)) {
-		bzero(commandp, sizeof(commandp));
-		snprintf(commandp, WLC_IOCTL_SMLEN, "WBTEXT_ENABLE %d", mode);
-		error = wl_android_wbtext(dev, commandp, WLC_IOCTL_SMLEN);
-		if (error) {
-			WL_ERR(("Failed to set WBTEXT = %d\n", error));
-			return error;
-		}
-	}
-
-	return error;
-}
-#endif /* WES_SUPPORT */
 
 static int wl_cfg80211_wbtext_btm_timer_threshold(struct net_device *dev,
 	char *command, int total_len)
@@ -2341,7 +2179,7 @@ int wl_android_wifi_off(struct net_device *dev, bool force_off)
 	}
 #endif	/* BCMPCIE && DHD_DEBUG_UART */
 	dhd_net_if_lock(dev);
-	WL_MSG(dev->name, " g_wifi_on=%d force_off=%d\n", g_wifi_on, force_off);
+	WL_MSG(dev->name, "g_wifi_on=%d force_off=%d\n", g_wifi_on, force_off);
 	if (g_wifi_on || force_off) {
 #if defined(BCMSDIO) || defined(BCMPCIE) || defined(BCMDBUS)
 		ret = dhd_net_bus_devreset(dev, TRUE);
@@ -2349,6 +2187,11 @@ int wl_android_wifi_off(struct net_device *dev, bool force_off)
 		dhd_net_bus_suspend(dev);
 #endif /* BCMSDIO */
 #endif /* BCMSDIO || BCMPCIE || BCMDBUS */
+#ifdef RMMOD_POWER_DOWN_LATER
+		if (atomic_read(&exit_in_progress))
+			WL_MSG(dev->name, "module exit in progress\n");
+		else
+#endif
 		dhd_net_wifi_platform_set_power(dev, FALSE, WIFI_TURNOFF_DELAY);
 		g_wifi_on = FALSE;
 	}
@@ -3680,7 +3523,7 @@ wl_android_set_auto_channel(struct net_device *dev, const char* cmd_str,
 		goto done2;
 	}
 
-	chosen = wl_ext_autochannel(dev, ACS_DRV_BIT, band);
+	chosen = wl_ext_autochannel(dev, ACS_DRV_BIT, band, NULL);
 	channel = wf_chspec_ctlchan(chosen);
 	if (channel) {
 		acs_band = CHSPEC_BAND(channel);
@@ -4331,6 +4174,7 @@ resume:
 	return ret;
 }
 
+#ifdef WL_NETLINK
 #define NETLINK_OXYGEN     30
 #define AIBSS_BEACON_TIMEOUT	10
 
@@ -4416,6 +4260,7 @@ wl_netlink_send_msg(int pid, int type, int seq, const void *data, size_t size)
 nlmsg_failure:
 	return ret;
 }
+#endif /* WL_NETLINK */
 
 int wl_keep_alive_set(struct net_device *dev, char* extra)
 {
@@ -8196,8 +8041,7 @@ wl_handle_private_cmd(struct net_device *net, char *command, u32 cmd_len)
 #endif /* DHD_BLOB_EXISTENCE_CHECK */
 		if ((rev_info_delim) &&
 			(strnicmp(rev_info_delim, CMD_COUNTRY_DELIMITER,
-			strlen(CMD_COUNTRY_DELIMITER)) == 0) &&
-			(rev_info_delim + 1)) {
+			strlen(CMD_COUNTRY_DELIMITER)) == 0)) {
 			revinfo  = bcm_atoi(rev_info_delim + 1);
 		} else {
 			revinfo = 0;
@@ -8853,7 +8697,9 @@ int wl_android_init(void)
 #ifdef WL_GENL
 	wl_genl_init();
 #endif
+#ifdef WL_NETLINK
 	wl_netlink_init();
+#endif
 
 	return ret;
 }
@@ -8866,7 +8712,9 @@ int wl_android_exit(void)
 #ifdef WL_GENL
 	wl_genl_deinit();
 #endif /* WL_GENL */
+#ifdef WL_NETLINK
 	wl_netlink_deinit();
+#endif
 
 	GCC_DIAGNOSTIC_PUSH_SUPPRESS_CAST();
 	list_for_each_entry_safe(cur, q, &miracast_resume_list, list) {
@@ -9154,220 +9002,6 @@ wl_android_set_wifi_on_flag(bool enable)
 	DHD_ERROR(("%s: %d\n", __FUNCTION__, enable));
 	g_wifi_on = enable;
 }
-
-#ifdef WL_STATIC_IF
-struct net_device *
-wl_cfg80211_register_static_if(struct bcm_cfg80211 *cfg, u16 iftype, char *ifname,
-	int static_ifidx)
-{
-#if defined(CUSTOM_MULTI_MAC) || defined(WL_EXT_IAPSTA)
-	dhd_pub_t *dhd = cfg->pub;
-#endif
-	struct net_device *ndev;
-	struct wireless_dev *wdev = NULL;
-	int ifidx = WL_STATIC_IFIDX; /* Register ndev with a reserved ifidx */
-	u8 mac_addr[ETH_ALEN];
-	struct net_device *primary_ndev;
-#ifdef DHD_USE_RANDMAC
-	struct ether_addr ea_addr;
-#endif /* DHD_USE_RANDMAC */
-#ifdef CUSTOM_MULTI_MAC
-	char hw_ether[62];
-#endif
-
-	BCM_REFERENCE(primary_ndev);
-
-	WL_INFORM_MEM(("[STATIC_IF] Enter (%s) iftype:%d\n", ifname, iftype));
-
-	if (!cfg) {
-		WL_ERR(("cfg null\n"));
-		return NULL;
-	}
-	primary_ndev = bcmcfg_to_prmry_ndev(cfg);
-	UNUSED_PARAMETER(primary_ndev);
-
-	ifidx += static_ifidx;
-#ifdef DHD_USE_RANDMAC
-	wl_cfg80211_generate_mac_addr(&ea_addr);
-	(void)memcpy_s(mac_addr, ETH_ALEN, ea_addr.octet, ETH_ALEN);
-#else
-#if defined(CUSTOM_MULTI_MAC)
-	if (!wifi_platform_get_mac_addr(dhd->info->adapter, hw_ether, static_ifidx+1)) {
-		(void)memcpy_s(mac_addr, ETH_ALEN, hw_ether, ETH_ALEN);
-		DEV_ADDR_GET(hw_ether, mac_addr);
-	} else
-#endif
-	{
-		/* Use primary mac with locally admin bit set */
-		DEV_ADDR_GET(primary_ndev, mac_addr);
-		mac_addr[0] |= 0x02;
-#ifdef WL_EXT_IAPSTA
-		wl_ext_iapsta_get_vif_macaddr(dhd, static_ifidx+1, mac_addr);
-#endif
-	}
-#endif /* DHD_USE_RANDMAC */
-
-	ndev = wl_cfg80211_allocate_if(cfg, ifidx, ifname, mac_addr,
-		WL_BSSIDX_MAX, NULL);
-	if (unlikely(!ndev)) {
-		WL_ERR(("Failed to allocate static_if\n"));
-		goto fail;
-	}
-	wdev = (struct wireless_dev *)MALLOCZ(cfg->osh, sizeof(*wdev));
-	if (unlikely(!wdev)) {
-		WL_ERR(("Failed to allocate wdev for static_if\n"));
-		goto fail;
-	}
-
-	wdev->wiphy = cfg->wdev->wiphy;
-	wdev->iftype = iftype;
-
-	ndev->ieee80211_ptr = wdev;
-	SET_NETDEV_DEV(ndev, wiphy_dev(wdev->wiphy));
-	wdev->netdev = ndev;
-
-	if (wl_cfg80211_register_if(cfg, ifidx,
-		ndev, TRUE) != BCME_OK) {
-		WL_ERR(("ndev registration failed!\n"));
-		goto fail;
-	}
-
-	cfg->static_ndev[static_ifidx] = ndev;
-	cfg->static_ndev_state[static_ifidx] = NDEV_STATE_OS_IF_CREATED;
-	wl_cfg80211_update_iflist_info(cfg, ndev, ifidx, NULL, WL_BSSIDX_MAX,
-		ifname, NDEV_STATE_OS_IF_CREATED);
-	WL_INFORM_MEM(("Static I/F (%s) Registered\n", ndev->name));
-	return ndev;
-
-fail:
-	wl_cfg80211_remove_if(cfg, ifidx, ndev, false);
-	return NULL;
-}
-
-void
-wl_cfg80211_unregister_static_if(struct bcm_cfg80211 *cfg)
-{
-	int i;
-
-	WL_INFORM_MEM(("[STATIC_IF] Enter\n"));
-	if (!cfg) {
-		WL_ERR(("invalid input\n"));
-		return;
-	}
-
-	/* wdev free will happen from notifier context */
-	/* free_netdev(cfg->static_ndev);
-	*/
-	for (i=0; i<DHD_MAX_STATIC_IFS; i++) {
-		if (cfg->static_ndev[i])
-			unregister_netdev(cfg->static_ndev[i]);
-	}
-}
-
-s32
-wl_cfg80211_static_if_open(struct net_device *net)
-{
-	struct wireless_dev *wdev = NULL;
-	struct bcm_cfg80211 *cfg = wl_get_cfg(net);
-	struct net_device *primary_ndev = bcmcfg_to_prmry_ndev(cfg);
-	u16 iftype = net->ieee80211_ptr ? net->ieee80211_ptr->iftype : 0;
-	u16 wl_iftype, wl_mode;
-#ifdef CUSTOM_MULTI_MAC
-	dhd_pub_t *dhd = dhd_get_pub(net);
-	char hw_ether[62];
-#endif
-	int static_ifidx;
-
-	WL_INFORM_MEM(("[STATIC_IF] dev_open ndev %p and wdev %p\n", net, net->ieee80211_ptr));
-	static_ifidx = wl_cfg80211_static_ifidx(cfg, net);
-	ASSERT(static_ifidx >= 0);
-
-	if (cfg80211_to_wl_iftype(iftype, &wl_iftype, &wl_mode) <  0) {
-		return BCME_ERROR;
-	}
-	if (cfg->static_ndev_state[static_ifidx] != NDEV_STATE_FW_IF_CREATED) {
-#ifdef CUSTOM_MULTI_MAC
-		if (!wifi_platform_get_mac_addr(dhd->info->adapter, hw_ether, static_ifidx+1))
-			dev_addr_set(net, hw_ether);
-#endif
-		wdev = wl_cfg80211_add_if(cfg, primary_ndev, wl_iftype, net->name, net->dev_addr);
-		if (!wdev) {
-			WL_ERR(("[STATIC_IF] wdev is NULL, can't proceed"));
-			return BCME_ERROR;
-		}
-	} else {
-		WL_INFORM_MEM(("Fw IF for static netdev already created\n"));
-	}
-
-	return BCME_OK;
-}
-
-s32
-wl_cfg80211_static_if_close(struct net_device *net)
-{
-	int ret = BCME_OK;
-	struct bcm_cfg80211 *cfg = wl_get_cfg(net);
-	struct net_device *primary_ndev = bcmcfg_to_prmry_ndev(cfg);
-	int static_ifidx;
-
-	/* clear flags */
-	wl_clr_drv_status(cfg, AP_ROLE_UPGRADED, net);
-	static_ifidx = wl_cfg80211_static_ifidx(cfg, net);
-
-	if (cfg->static_ndev_state[static_ifidx] == NDEV_STATE_FW_IF_CREATED) {
-		if (mutex_is_locked(&cfg->if_sync) == TRUE) {
-			ret = _wl_cfg80211_del_if(cfg, primary_ndev, net->ieee80211_ptr, net->name);
-		} else {
-			ret = wl_cfg80211_del_if(cfg, primary_ndev, net->ieee80211_ptr, net->name);
-		}
-
-		if (unlikely(ret)) {
-			WL_ERR(("Del iface failed for static_if %d\n", ret));
-		}
-	}
-
-	return ret;
-}
-
-struct net_device *
-wl_cfg80211_post_static_ifcreate(struct bcm_cfg80211 *cfg,
-	wl_if_event_info *event, u8 *addr, s32 iface_type, int static_ifidx)
-{
-	struct net_device *new_ndev = NULL;
-	struct wireless_dev *wdev = NULL;
-
-	WL_INFORM_MEM(("Updating static iface after Fw IF create \n"));
-	new_ndev = cfg->static_ndev[static_ifidx];
-
-	if (new_ndev) {
-		wdev = new_ndev->ieee80211_ptr;
-		ASSERT(wdev);
-		wdev->iftype = iface_type;
-		DEV_ADDR_SET(new_ndev, addr);
-	}
-
-	cfg->static_ndev_state[static_ifidx] = NDEV_STATE_FW_IF_CREATED;
-	wl_cfg80211_update_iflist_info(cfg, new_ndev, event->ifidx, addr, event->bssidx,
-		event->name, NDEV_STATE_FW_IF_CREATED);
-	return new_ndev;
-}
-
-s32
-wl_cfg80211_post_static_ifdel(struct bcm_cfg80211 *cfg, struct net_device *ndev)
-{
-	int static_ifidx;
-	int ifidx = WL_STATIC_IFIDX;
-
-	static_ifidx = wl_cfg80211_static_ifidx(cfg, ndev);
-	ifidx += static_ifidx;
-	cfg->static_ndev_state[static_ifidx] = NDEV_STATE_FW_IF_DELETED;
-	wl_cfg80211_update_iflist_info(cfg, ndev, ifidx, NULL,
-		WL_BSSIDX_MAX, NULL, NDEV_STATE_FW_IF_DELETED);
-	wl_cfg80211_clear_per_bss_ies(cfg, ndev->ieee80211_ptr);
-	wl_dealloc_netinfo_by_wdev(cfg, ndev->ieee80211_ptr);
-	return BCME_OK;
-}
-#endif /* WL_STATIC_IF */
 
 #ifdef WBTEXT
 static int

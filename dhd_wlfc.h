@@ -1,5 +1,24 @@
 /*
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2024 Synaptics Incorporated. All rights reserved.
+ *
+ * This software is licensed to you under the terms of the
+ * GNU General Public License version 2 (the "GPL") with Broadcom special exception.
+ *
+ * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
+ * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
+ * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
+ * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
+ * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION
+ * DOES NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES,
+ * SYNAPTICS' TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT
+ * EXCEED ONE HUNDRED U.S. DOLLARS
+ *
+ * Copyright (C) 2024, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -54,6 +73,9 @@ typedef bool (*f_processpkt_t)(void* p, void* arg);
 #define WLFC_HANGER_PKT_STATE_BUSRETURNED		2
 #define WLFC_HANGER_PKT_STATE_COMPLETE			\
 	(WLFC_HANGER_PKT_STATE_TXSTATUS | WLFC_HANGER_PKT_STATE_BUSRETURNED)
+
+#define SIMUTX_MAX_CNT_DOWN		1024
+#define SIMUTX_VALID_COMP_TXS	4
 
 typedef enum {
 	Q_TYPE_PSQ, /**< Power Save Queue, contains both delayed and suppressed packets */
@@ -160,7 +182,9 @@ typedef struct wlfc_mac_descriptor {
 	int onbus_pkts_count;
 	/** flag. TRUE when remote MAC is in suppressed state */
 	uint8 suppressed;
-
+#ifdef DHD_HWTSTAMP
+	uint32 tsf[WL_TXSTATUS_FREERUNCTR_MAXNUM][2];
+#endif /* DHD_HWTSTAMP */
 #ifdef QMONITOR
 	dhd_qmon_t qmon;
 #endif /* QMONITOR */
@@ -356,6 +380,8 @@ typedef struct athost_wl_status_info {
 #ifdef BULK_DEQUEUE
 	uint8	max_release_count;
 #endif /* total_credit */
+	uint8 last_ifid;
+	uint32 simutx_cntdown;
 } athost_wl_status_info_t;
 
 /** Please be mindful that total pkttag space is 32 octets only */

@@ -3,7 +3,26 @@
  * This header file housing the define and function prototype use by
  * both the wl driver, tools & Apps.
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2024 Synaptics Incorporated. All rights reserved.
+ *
+ * This software is licensed to you under the terms of the
+ * GNU General Public License version 2 (the "GPL") with Broadcom special exception.
+ *
+ * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
+ * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
+ * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
+ * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
+ * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION
+ * DOES NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES,
+ * SYNAPTICS' TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT
+ * EXCEED ONE HUNDRED U.S. DOLLARS
+ *
+ * Copyright (C) 2024, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -34,7 +53,10 @@ typedef uint16 chanspec_subband_t;
 
 /* channel defines */
 #define CH_80MHZ_APART                   16u
+#define CH_60MHZ_APART                   12u
+#define CH_50MHZ_APART                   10u
 #define CH_40MHZ_APART                    8u
+#define CH_30MHZ_APART                    6u
 #define CH_20MHZ_APART                    4u
 #define CH_10MHZ_APART                    2u
 #define CH_5MHZ_APART                     1u    /* 2G band channels are 5 Mhz apart */
@@ -44,6 +66,8 @@ typedef uint16 chanspec_subband_t;
 #define CH_MAX_2G_CHANNEL                14u    /* Max channel in 2G band */
 #define CH_MIN_2G_40M_CHANNEL             3u    /* Min 40MHz center channel in 2G band */
 #define CH_MAX_2G_40M_CHANNEL            11u    /* Max 40MHz center channel in 2G band */
+#define CH_MIN_5G_CHANNEL                34u    /* Min channel in 5G band */
+#define CH_MAX_5G_CHANNEL               200u    /* Max channel in 5G band */
 
 #define CH_MIN_6G_CHANNEL                 1u    /* Min 20MHz channel in 6G band */
 #define CH_MAX_6G_CHANNEL               253u    /* Max 20MHz channel in 6G band */
@@ -65,6 +89,21 @@ typedef uint16 chanspec_subband_t;
 #define MAXCHANNEL_NUM	(MAXCHANNEL - 1)	/* max channel number */
 
 #define INVCHANNEL                      255u    /* error value for a bad channel */
+
+/* channel 52 ~ 144 */
+#define CH_RADAR_CHANNEL_MIN            50
+#define CH_RADAR_CHANNEL_MAX            146
+
+/* Frequency defines */
+#define CH_FREQ_20MHz_OFFSET                       20u
+#define CH_FREQ_HT40_SECONDARY_CHANNEL_INTERVAL    (CH_FREQ_20MHz_OFFSET)
+
+#ifndef CONST_CUSTOMER_CHANLIST_INVALID
+#define CONST_CUSTOMER_CHANLIST_INVALID		0x01
+#endif /* CONST_CUSTOMER_CHANLIST_INVALID */
+#define SYNA_CUSTOMER_CHANLIST_INVALID(vector) \
+	(CONST_CUSTOMER_CHANLIST_INVALID & ((vector)[0]))
+#define SYNA_CUSTOMER_CHANLIST_VALID(vector)	(!SYNA_CUSTOMER_CHANLIST_INVALID(vector))
 
 /* length of channel vector bitmap is the MAXCHANNEL we want to handle rounded up to a byte */
 /* The actual CHANVEC_LEN fix is leading to high static memory impact

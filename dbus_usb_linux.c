@@ -2,7 +2,26 @@
  * Dongle BUS interface
  * USB Linux Implementation
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2024 Synaptics Incorporated. All rights reserved.
+ *
+ * This software is licensed to you under the terms of the
+ * GNU General Public License version 2 (the "GPL") with Broadcom special exception.
+ *
+ * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
+ * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
+ * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
+ * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
+ * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION
+ * DOES NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES,
+ * SYNAPTICS' TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT
+ * EXCEED ONE HUNDRED U.S. DOLLARS
+ *
+ * Copyright (C) 2024, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -69,7 +88,11 @@
 #include <linux/spinlock.h>
 #include <linux/list.h>
 #include <asm/uaccess.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+#include <linux/unaligned.h>
+#else
 #include <asm/unaligned.h>
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0) */
 #include <dbus.h>
 #include <bcmutils.h>
 #include <bcmdevs_legacy.h>
@@ -200,8 +223,14 @@ static inline int usb_submit_urb_linux(struct urb *urb)
 #define URB_QUEUE_BULK   0
 #endif /* WL_URB_ZPKT */
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0))
+#define CALLBACK_ARGS		struct urb *urb
+#define CALLBACK_ARGS_DATA	urb
+#else
 #define CALLBACK_ARGS		struct urb *urb, struct pt_regs *regs
 #define CALLBACK_ARGS_DATA	urb, regs
+#endif /* 5.18 */
+
 #define CONFIGDESC(usb)		(&((usb)->actconfig)->desc)
 #define IFPTR(usb, idx)		((usb)->actconfig->interface[idx])
 #define IFALTS(usb, idx)	(IFPTR((usb), (idx))->altsetting[0])
@@ -482,9 +511,6 @@ static int dbus_usbos_usbreset_func(void *data);
 static struct usb_device_id devid_table[] = {
 	{ USB_DEVICE(BCM_DNGL_VID, 0x0000) }, /* Configurable via register() */
 #if defined(BCM_DNGL_EMBEDIMAGE) || defined(BCM_REQUEST_FW)
-	{ USB_DEVICE(BCM_DNGL_VID, BCM_DNGL_BL_PID_4328) },
-	{ USB_DEVICE(BCM_DNGL_VID, BCM_DNGL_BL_PID_43143) },
-	{ USB_DEVICE(BCM_DNGL_VID, BCM_DNGL_BL_PID_43242) },
 	{ USB_DEVICE(BCM_DNGL_VID, BCM_DNGL_BL_PID_4360) },
 	{ USB_DEVICE(BCM_DNGL_VID, BCM_DNGL_BL_PID_43569) },
 	{ USB_DEVICE(BCM_DNGL_VID, BCM_DNGL_BL_PID_4381) },
@@ -505,7 +531,7 @@ MODULE_DEVICE_TABLE(usb, devid_table);
 
 /** functions called by the Linux kernel USB subsystem */
 static struct usb_driver dbus_usbdev = {
-	name:           "dbus_usbdev"BUS_TYPE,
+	name:           "dbus_usbdev"ADAPTER_IDX_STR,
 	probe:          dbus_usbos_probe,
 	disconnect:     dbus_usbos_disconnect,
 	id_table:       devid_table,
@@ -1021,7 +1047,11 @@ dbus_usbos_recv_urb_submit(usbos_info_t *usbos_info, dbus_irb_rx_t *rxirb,
 	usb_fill_bulk_urb(req->urb, usbos_info->usb, rx_pipe,
 		p,
 		rxirb->buf_len,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0))
+		(void *)dbus_usbos_recv_complete, req);
+#else
 		(usb_complete_t)dbus_usbos_recv_complete, req);
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0) */
 		req->urb->transfer_flags |= URB_QUEUE_BULK;
 
 	if ((ret = USB_SUBMIT_URB(req->urb))) {
@@ -2130,7 +2160,11 @@ dbus_usbos_intf_send_irb(void *bus, dbus_irb_tx_t *txirb)
 		req_zlp->buf_len = 0;
 
 		usb_fill_bulk_urb(req_zlp->urb, usbos_info->usb, usbos_info->tx_pipe, NULL,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0))
+			0, (void *)dbus_usbos_send_complete, req_zlp);
+#else
 			0, (usb_complete_t)dbus_usbos_send_complete, req_zlp);
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0) */
 
 		req_zlp->urb->transfer_flags |= URB_QUEUE_BULK;
 	}
@@ -2185,7 +2219,11 @@ dbus_usbos_intf_send_irb(void *bus, dbus_irb_tx_t *txirb)
 	}
 
 	usb_fill_bulk_urb(req->urb, usbos_info->usb, usbos_info->tx_pipe, buf,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0))
+		buffer_length, (void *)dbus_usbos_send_complete, req);
+#else
 		buffer_length, (usb_complete_t)dbus_usbos_send_complete, req);
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0) */
 
 	req->urb->transfer_flags |= URB_QUEUE_BULK;
 
@@ -2350,7 +2388,11 @@ dbus_usbos_intf_send_ctl(void *bus, uint8 *buf, int len)
 		usbos_info->usb,
 		usb_sndctrlpipe(usbos_info->usb, 0),
 		(unsigned char *) &usbos_info->ctl_write,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0))
+		buf, size, (void *)dbus_usbos_ctlwrite_complete, usbos_info);
+#else
 		buf, size, (usb_complete_t)dbus_usbos_ctlwrite_complete, usbos_info);
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0) */
 
 #ifdef USBOS_TX_THREAD
 	/* Enqueue CTRL request for transmission by the TX thread. The
@@ -2415,7 +2457,11 @@ dbus_usbos_intf_recv_ctl(void *bus, uint8 *buf, int len)
 		usbos_info->usb,
 		usb_rcvctrlpipe(usbos_info->usb, 0),
 		(unsigned char *) &usbos_info->ctl_read,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0))
+		buf, size, (void *)dbus_usbos_ctlread_complete, usbos_info);
+#else
 		buf, size, (usb_complete_t)dbus_usbos_ctlread_complete, usbos_info);
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0) */
 
 	status = USB_SUBMIT_URB(usbos_info->ctl_urb);
 	if (status < 0) {
@@ -4535,7 +4581,7 @@ dbus_get_fwfile(int devid, int chiprev, uint8 **fw, int *fwlen,
 	const struct firmware *firmware = NULL;
 	s8 *device_id = NULL;
 	s8 *chip_rev = "";
-	s8 file_name[64];
+	s8 file_name[64] = {0, };
 	int ret;
 
 	switch (devid) {

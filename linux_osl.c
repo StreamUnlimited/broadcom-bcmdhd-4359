@@ -1,7 +1,26 @@
 /*
  * Linux OS Independent Layer
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2024 Synaptics Incorporated. All rights reserved.
+ *
+ * This software is licensed to you under the terms of the
+ * GNU General Public License version 2 (the "GPL") with Broadcom special exception.
+ *
+ * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
+ * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
+ * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
+ * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
+ * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION
+ * DOES NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES,
+ * SYNAPTICS' TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT
+ * EXCEED ONE HUNDRED U.S. DOLLARS
+ *
+ * Copyright (C) 2024, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -33,6 +52,9 @@
 #endif /* __ARM_ARCH_7A__ && !DHD_USE_COHERENT_MEM_FOR_RING */
 
 #include <linux/random.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)
+#include <linux/sched/clock.h>
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0) */
 
 #include <osl.h>
 #include <bcmutils.h>
@@ -283,6 +305,15 @@ osl_attach(void *pdev, uint bustype, bool pkttag
 	}
 #endif /* DHD_MAP_LOGGING */
 
+#ifdef DHD_USE_KMEM_CACHE_USERCOPY
+	osh->ioctl_buf_cache = kmem_cache_create_usercopy(
+		"dhd_ioctl_buf", KMEM_CACHE_USERCOPY_MAXLEN_32K, 0,
+		SLAB_HWCACHE_ALIGN, 0, KMEM_CACHE_USERCOPY_MAXLEN_32K, NULL);
+	if (osh->ioctl_buf_cache == NULL) {
+		OSL_PRINT(("%s: Failed to create ioctl_buf_cache\n", __FUNCTION__));
+	}
+#endif /* DHD_USE_KMEM_CACHE_USERCOPY */
+
 	return osh;
 }
 
@@ -320,6 +351,11 @@ osl_detach(osl_t *osh)
 	osl_dma_map_log_deinit(osh);
 #endif /* DHD_MAP_LOGGING */
 
+#ifdef DHD_USE_KMEM_CACHE_USERCOPY
+	if (osh->ioctl_buf_cache)
+		kmem_cache_destroy(osh->ioctl_buf_cache);
+#endif /* DHD_USE_KMEM_CACHE_USERCOPY */
+
 	ASSERT(osh->magic == OS_HANDLE_MAGIC);
 	atomic_sub(1, &osh->cmn->refcount);
 	if (atomic_read(&osh->cmn->refcount) == 0) {
@@ -353,14 +389,14 @@ inline void
 BCMFASTPATH(osl_cache_flush)(void *va, uint size)
 {
 	if (size > 0)
-		dma_sync_single_for_device(OSH_NULL, virt_to_dma(OSH_NULL, va), size,
+		dma_sync_single_for_device(OSH_NULL, virt_to_phys(va), size,
 			DMA_TO_DEVICE);
 }
 
 inline void
 BCMFASTPATH(osl_cache_inv)(void *va, uint size)
 {
-	dma_sync_single_for_cpu(OSH_NULL, virt_to_dma(OSH_NULL, va), size, DMA_FROM_DEVICE);
+	dma_sync_single_for_cpu(OSH_NULL, virt_to_phys(va), size, DMA_FROM_DEVICE);
 }
 
 inline void
@@ -662,6 +698,26 @@ osl_dma_mfree(osl_t *osh, void *addr, uint size)
 	addr = NULL;
 }
 
+#ifdef DHD_USE_KMEM_CACHE_USERCOPY
+void *
+osl_kmem_cache_alloc_usercopy(osl_t *osh)
+{
+	if (!osh->ioctl_buf_cache)
+		return NULL;
+
+	return kmem_cache_alloc(osh->ioctl_buf_cache, GFP_KERNEL);
+}
+
+void
+osl_kmem_cache_free_usercopy(osl_t *osh, void *addr)
+{
+	if (!osh->ioctl_buf_cache)
+		return;
+
+	kmem_cache_free(osh->ioctl_buf_cache, addr);
+}
+#endif /* DHD_USE_KMEM_CACHE_USERCOPY */
+
 #ifdef BCMDBG_MEM
 /* In BCMDBG_MEM configurations osl_vmalloc is only used internally in
  * the implementation of osl_debug_vmalloc.  Because we are using the GCC
@@ -749,10 +805,11 @@ osl_kvmalloc(osl_t *osh, uint size)
 
 	flags = CAN_SLEEP() ? GFP_KERNEL: GFP_ATOMIC;
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 12, 0))
-	if ((addr = kmalloc(size, flags)) == NULL) {
+	if ((addr = kmalloc(size, flags)) == NULL)
 #else
-	if ((addr = kvmalloc(size, flags)) == NULL) {
+	if ((addr = kvmalloc(size, flags)) == NULL)
 #endif /* LINUX_VERSION_CODE < KERNEL_VERSION(4, 12, 0) */
+	{
 		if (osh)
 			osh->failed++;
 		return (NULL);
@@ -1310,7 +1367,7 @@ osl_dma_free_consistent(osl_t *osh, void *va, uint size, dmaaddr_t pa)
 	UNUSED_PARAMETER(hwdev);
 
 #if (defined(__ARM_ARCH_7A__) && !defined(DHD_USE_COHERENT_MEM_FOR_RING))
-	kfree(va);
+	KVFREE(osh, va);
 #else /* (defined(__ARM_ARCH_7A__) && !defined(DHD_USE_COHERENT_MEM_FOR_RING)) */
 	hwdev = osh->pdev;
 #ifdef BCMDMA64OSL
@@ -1910,7 +1967,7 @@ timer_cb_compat(struct timer_list *tl)
 /* Note: All timer api's are thread unsafe and should be protected with locks by caller */
 
 osl_timer_t *
-osl_timer_init(osl_t *osh, const char *name, void (*fn)(void *arg), void *arg)
+osl_timer_init(osl_t *osh, const char *name, void (*fn)(ulong arg), void *arg)
 {
 	osl_timer_t *t;
 	BCM_REFERENCE(fn);

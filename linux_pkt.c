@@ -1,7 +1,26 @@
 /*
  * Linux Packet (skb) interface
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2024 Synaptics Incorporated. All rights reserved.
+ *
+ * This software is licensed to you under the terms of the
+ * GNU General Public License version 2 (the "GPL") with Broadcom special exception.
+ *
+ * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
+ * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
+ * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
+ * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
+ * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION
+ * DOES NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES,
+ * SYNAPTICS' TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT
+ * EXCEED ONE HUNDRED U.S. DOLLARS
+ *
+ * Copyright (C) 2024, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -867,13 +886,10 @@ osl_pktalloced(osl_t *osh)
 #include <linux/kallsyms.h>
 #include <net/sock.h>
 void
-osl_pkt_orphan_partial(struct sk_buff *skb, int tsq)
+osl_pkt_orphan_partial(struct sk_buff *skb)
 {
 	uint32 fraction;
 	static void *p_tcp_wfree = NULL;
-
-	if (tsq <= 0)
-		return;
 
 	if (!skb->destructor || skb->destructor == sock_wfree)
 		return;
@@ -901,9 +917,8 @@ osl_pkt_orphan_partial(struct sk_buff *skb, int tsq)
 	 * sk_wmem_alloc to allow more skb can be allocated for this
 	 * socket for better cusion meeting WiFi device requirement
 	 */
-	fraction = skb->truesize * (tsq - 1) / tsq;
+	fraction = skb->truesize * (TSQ_MULTIPLIER - 1) / TSQ_MULTIPLIER;
 	skb->truesize -= fraction;
 	atomic_sub(fraction, (atomic_t *)&skb->sk->sk_wmem_alloc);
-	skb_orphan(skb);
 }
 #endif /* LINUX_VERSION >= 3.6.0 && TSQ_MULTIPLIER */

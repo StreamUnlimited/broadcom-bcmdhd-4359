@@ -1183,7 +1183,7 @@ static int
 wl_iw_get_aplist(
 	struct net_device *dev,
 	struct iw_request_info *info,
-	union iwreq_data *wrqu,
+	struct iw_point *wrqu,
 	char *extra
 )
 {
@@ -1215,7 +1215,7 @@ wl_iw_get_aplist(
 	list->buflen = dtoh32(list->buflen);
 	list->version = dtoh32(list->version);
 	list->count = dtoh32(list->count);
-	ASSERT(list->version == WL_BSS_INFO_VERSION);
+	ASSERT(list->version == WL_BSS_INFO_VER_109);
 
 	for (i = 0, dwrq->length = 0; i < list->count && dwrq->length < IW_MAX_AP; i++) {
 		bi = bi ? (wl_bss_info_v109_t *)((uintptr)bi + dtoh32(bi->length)) : list->bss_info;
@@ -1292,8 +1292,8 @@ wl_iw_iscan_get_aplist(
 	buf = iscan->list_hdr;
 	/* Get scan results (too large to put on the stack) */
 	while (buf) {
-	    list = &((wl_iscan_results_t*)buf->iscan_buf)->results;
-	    ASSERT(list->version == WL_BSS_INFO_VERSION);
+	    list = &((wl_iscan_results_v109_t*)buf->iscan_buf)->results;
+	    ASSERT(list->version == WL_BSS_INFO_VER_109);
 
 	    bi = NULL;
 	for (i = 0, dwrq->length = 0; i < list->count && dwrq->length < IW_MAX_AP; i++) {
@@ -1568,17 +1568,20 @@ wl_iw_handle_scanresults_ies(char **event_p, char *end,
 	if (bi->ie_length) {
 		/* look for wpa/rsn ies in the ie list... */
 		bcm_tlv_t *ie;
-		uint8 *ptr = ((uint8 *)bi) + bi->ie_offset;
+		uint8 *ptr = ((uint8 *)bi) + bi->ie_offset, *ie_data;
 		int ptr_len = bi->ie_length;
 
 		/* OSEN IE */
-		if ((ie = bcm_parse_tlvs(ptr, ptr_len, DOT11_MNG_VS_ID)) &&
-			ie->len > WFA_OUI_LEN + 1 &&
-			!bcmp((const void *)&ie->data[0], (const void *)WFA_OUI, WFA_OUI_LEN) &&
-			ie->data[WFA_OUI_LEN] == WFA_OUI_TYPE_OSEN) {
-			iwe.cmd = IWEVGENIE;
-			iwe.u.data.length = ie->len + 2;
-			event = IWE_STREAM_ADD_POINT(info, event, end, &iwe, (char *)ie);
+		ie = bcm_parse_tlvs(ptr, ptr_len, DOT11_MNG_VS_ID);
+		if (ie) {
+			ie_data = ie->data;
+			if (ie->len > WFA_OUI_LEN + 1 &&
+				!bcmp((const void *)&ie->data[0], (const void *)WFA_OUI, WFA_OUI_LEN) &&
+				ie_data[WFA_OUI_LEN] == WFA_OUI_TYPE_OSEN) {
+					iwe.cmd = IWEVGENIE;
+					iwe.u.data.length = ie->len + 2;
+					event = IWE_STREAM_ADD_POINT(info, event, end, &iwe, (char *)ie);
+			}
 		}
 		ptr = ((uint8 *)bi) + bi->ie_offset;
 
@@ -1661,7 +1664,7 @@ static int
 wl_iw_get_scan(
 	struct net_device *dev,
 	struct iw_request_info *info,
-	union iwreq_data *wrqu,
+	struct iw_point *wrqu,
 	char *extra
 )
 {
@@ -1702,7 +1705,7 @@ wl_iw_get_scan(
 	list->version = dtoh32(list->version);
 	list->count = dtoh32(list->count);
 
-	ASSERT(list->version == WL_BSS_INFO_VERSION);
+	ASSERT(list->version == WL_BSS_INFO_VER_109);
 
 	for (i = 0; i < list->count && i < IW_MAX_AP; i++) {
 		bi = bi ? (wl_bss_info_v109_t *)((uintptr)bi + dtoh32(bi->length)) : list->bss_info;
@@ -1838,10 +1841,10 @@ wl_iw_iscan_get_scan(
 	p_buf = iscan->list_hdr;
 	/* Get scan results */
 	while (p_buf != iscan->list_cur) {
-		list = &((wl_iscan_results_t*)p_buf->iscan_buf)->results;
+		list = &((wl_iscan_results_v109_t*)p_buf->iscan_buf)->results;
 
-		if (list->version != WL_BSS_INFO_VERSION) {
-			WL_ERROR(("list->version %d != WL_BSS_INFO_VERSION\n", list->version));
+		if (list->version != WL_BSS_INFO_VER_109) {
+			WL_ERROR(("list->version %d != WL_BSS_INFO_VER_109\n", list->version));
 		}
 
 		bi = NULL;
@@ -2864,8 +2867,13 @@ wl_iw_set_pmksa(
 		bzero((char *)pmk_list, sizeof(struct pmk_list));
 	}
 	if (iwpmksa->cmd == IW_PMKSA_REMOVE) {
-		pmkid_list_v1_t pmkid, *pmkidptr;
-		pmkidptr = &pmkid;
+		pmkid_list_v1_t *pmkidptr;
+		u32 v1_list_size = (u32)(sizeof(pmkid_list_v1_t) + sizeof(pmkid_v1_t));
+
+		if (!(pmkidptr = kmalloc(v1_list_size, GFP_KERNEL))) {
+			WL_ERROR(("kmalloc failed\n"));
+			return -ENOMEM;
+		}
 		bcopy(&iwpmksa->bssid.sa_data[0], &pmkidptr->pmkid[0].BSSID, ETHER_ADDR_LEN);
 		bcopy(&iwpmksa->pmkid[0], &pmkidptr->pmkid[0].PMKID, WPA2_PMKID_LEN);
 		{
@@ -2877,6 +2885,8 @@ wl_iw_set_pmksa(
 				WL_TRACE(("%02x ", pmkidptr->pmkid[0].PMKID[j]));
 			WL_TRACE(("\n"));
 		}
+		if (pmkidptr)
+			kfree(pmkidptr);
 		for (i = 0; i < pmk_list->pmkids.npmkid; i++)
 			if (!bcmp(&iwpmksa->bssid.sa_data[0], &pmkid_array[i].BSSID,
 				ETHER_ADDR_LEN))
@@ -4086,7 +4096,7 @@ wl_iw_iscan(iscan_info_t *iscan, wlc_ssid_t *ssid, uint16 action)
 	err = wl_iw_iscan_prep(&params->params, ssid);
 
 	if (!err) {
-		params->version = htod32(ISCAN_REQ_VERSION);
+		params->version = htod32(ISCAN_REQ_VERSION_V1);
 		params->action = htod16(action);
 		params->scan_duration = htod16(0);
 
@@ -4104,8 +4114,8 @@ wl_iw_iscan_get(iscan_info_t *iscan)
 {
 	iscan_buf_t * buf;
 	iscan_buf_t * ptr;
-	wl_iscan_results_t * list_buf;
-	wl_iscan_results_t list;
+	wl_iscan_results_v109_t * list_buf;
+	wl_iscan_results_v109_t list;
 	wl_scan_results_v109_t *results;
 	uint32 status;
 
@@ -4130,9 +4140,9 @@ wl_iw_iscan_get(iscan_info_t *iscan)
 		}
 	}
 	memset(buf->iscan_buf, 0, WLC_IW_ISCAN_MAXLEN);
-	list_buf = (wl_iscan_results_t*)buf->iscan_buf;
+	list_buf = (wl_iscan_results_v109_t*)buf->iscan_buf;
 	results = &list_buf->results;
-	results->buflen = WL_ISCAN_RESULTS_FIXED_SIZE;
+	results->buflen = WL_ISCAN_RESULTS_V109_FIXED_SIZE;
 	results->version = 0;
 	results->count = 0;
 
@@ -4142,7 +4152,7 @@ wl_iw_iscan_get(iscan_info_t *iscan)
 		iscan->dev,
 		"iscanresults",
 		&list,
-		WL_ISCAN_RESULTS_FIXED_SIZE,
+		WL_ISCAN_RESULTS_V109_FIXED_SIZE,
 		buf->iscan_buf,
 		WLC_IW_ISCAN_MAXLEN);
 	results->buflen = dtoh32(results->buflen);

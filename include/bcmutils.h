@@ -1,7 +1,26 @@
 /*
  * Misc useful os-independent macros and functions.
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2024 Synaptics Incorporated. All rights reserved.
+ *
+ * This software is licensed to you under the terms of the
+ * GNU General Public License version 2 (the "GPL") with Broadcom special exception.
+ *
+ * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
+ * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
+ * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
+ * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
+ * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION
+ * DOES NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES,
+ * SYNAPTICS' TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT
+ * EXCEED ONE HUNDRED U.S. DOLLARS
+ *
+ * Copyright (C) 2024, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -1368,23 +1387,27 @@ int valid_bcmerror(int e);
 /* Used to pass in a macro variable that gets expanded and then stringified */
 #define BCM_EXTENDED_STRINGIFY(s) BCM_STRINGIFY(s)
 
+extern uint32 ip_cksum_partial(uint32 sum, uint8 *val8, uint32 count);
+/* calculate IP checksum */
+extern uint16 ip_cksum(uint32 sum, uint8 *val8, uint32 count);
+
 /* calculate IPv4 header checksum
  * - input ip points to IP header in network order
  * - output cksum is in network order
  */
-uint16 ipv4_hdr_cksum(uint8 *ip, uint ip_len);
+extern uint16 ipv4_hdr_cksum(uint8 *ip, uint ip_len);
 
 /* calculate IPv4 TCP header checksum
  * - input ip and tcp points to IP and TCP header in network order
  * - output cksum is in network order
  */
-uint16 ipv4_tcp_hdr_cksum(uint8 *ip, uint8 *tcp, uint16 tcp_len);
+extern uint16 ipv4_tcp_hdr_cksum(uint8 *ip, uint8 *tcp, uint16 tcp_len);
 
 /* calculate IPv6 TCP header checksum
  * - input ipv6 and tcp points to IPv6 and TCP header in network order
  * - output cksum is in network order
  */
-uint16 ipv6_tcp_hdr_cksum(uint8 *ipv6, uint8 *tcp, uint16 tcp_len);
+extern uint16 ipv6_tcp_hdr_cksum(uint8 *ipv6, uint8 *tcp, uint16 tcp_len);
 
 #ifdef __cplusplus
 	}

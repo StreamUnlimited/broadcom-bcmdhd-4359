@@ -3,7 +3,26 @@
  * Provides type definitions and function prototypes used to link the
  * DHD OS, bus, and protocol modules.
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2024 Synaptics Incorporated. All rights reserved.
+ *
+ * This software is licensed to you under the terms of the
+ * GNU General Public License version 2 (the "GPL") with Broadcom special exception.
+ *
+ * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
+ * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
+ * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
+ * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
+ * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION
+ * DOES NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES,
+ * SYNAPTICS' TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT
+ * EXCEED ONE HUNDRED U.S. DOLLARS
+ *
+ * Copyright (C) 2024, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -2825,6 +2844,10 @@ dhd_pktid_map_reset_ioctl(dhd_pub_t *dhd, dhd_pktid_map_handle_t *handle)
 	uint32 map_items;
 	unsigned long flags;
 
+	if (handle == NULL) {
+		return;
+	}
+
 	map = (dhd_pktid_map_t *)handle;
 	DHD_PKTID_LOCK(map->pktid_lock, flags);
 
@@ -3318,6 +3341,10 @@ dhd_pktid_map_reset(dhd_pub_t *dhd, pktlists_t *handle)
 {
 	osl_t *osh = dhd->osh;
 
+	if (handle == NULL) {
+		return;
+	}
+
 	if (handle->ctrl_pkt_list) {
 		PKTLIST_FINI(handle->ctrl_pkt_list);
 		MFREE(osh, handle->ctrl_pkt_list, sizeof(PKT_LIST));
@@ -3639,7 +3666,7 @@ dhd_prot_attach(dhd_pub_t *dhd)
 		goto fail;
 
 	prot->pktid_tx_map = DHD_NATIVE_TO_PKTID_INIT(dhd, MAX_PKTID_TX);
-	if (prot->pktid_rx_map == NULL)
+	if (prot->pktid_tx_map == NULL)
 		goto fail;
 
 #ifdef IOCTLRESP_USE_CONSTMEM
@@ -4692,9 +4719,9 @@ extern void dhd_lb_rx_napi_dispatch(dhd_pub_t *dhdp);
 extern void dhd_lb_rx_pkt_enqueue(dhd_pub_t *dhdp, void *pkt, int ifidx);
 extern unsigned long dhd_read_lb_rxp(dhd_pub_t *dhdp);
 extern void dhd_rx_emerge_enqueue(dhd_pub_t *dhdp, void *pkt);
-extern void * dhd_rx_emerge_dequeue(dhd_pub_t *dhdp);
 
 #if defined(DHD_LB_RXP)
+extern void * dhd_rx_emerge_dequeue(dhd_pub_t *dhdp);
 /**
  * dhd_lb_dispatch_rx_process - load balance by dispatch Rx processing work
  * to other CPU cores
@@ -4704,13 +4731,13 @@ dhd_lb_dispatch_rx_process(dhd_pub_t *dhdp)
 {
 	dhd_lb_rx_napi_dispatch(dhdp); /* dispatch rx_process_napi */
 }
-#endif /* DHD_LB_RXP */
 #else
 static INLINE void *
 dhd_rx_emerge_dequeue(dhd_pub_t *dhdp)
 {
 	return NULL;
 }
+#endif /* DHD_LB_RXP */
 #endif /* DHD_LB */
 
 void
@@ -5038,6 +5065,23 @@ dhd_prot_detach_edl_rings(dhd_pub_t *dhd)
 }
 #endif	/* EWP_EDL */
 
+static void
+dhd_config_dongle_host_access(dhd_pub_t *dhd)
+{
+	int ret = 0;
+#ifdef WLAN_ACCEL_BOOT
+	uint32 bus_host_access = 0;
+#else
+	uint32 bus_host_access = 1;
+#endif /* !WLAN_ACCEL_BOOT */
+	/* When WLAN_ACCEL_BOOT is enabled CFG layer will set the host_access. Else set here. */
+	ret = dhd_iovar(dhd, 0, "bus:host_access",
+		(char *)&bus_host_access, sizeof(bus_host_access), NULL, 0, TRUE);
+	if (ret) {
+		DHD_ERROR(("bus:host_access(%d) error (%d)\n", bus_host_access, ret));
+	}
+}
+
 /**
  * Initialize protocol: sync w/dongle state.
  * Sets dongle media info (iswl, drv_version, mac address).
@@ -5149,6 +5193,7 @@ int dhd_sync_with_dongle(dhd_pub_t *dhd)
 
 	/* Post buffers for packet reception */
 	dhd_msgbuf_rxbuf_post(dhd, FALSE); /* alloc pkt ids */
+	dhd_config_dongle_host_access(dhd);
 
 	DHD_SSSR_DUMP_INIT(dhd);
 
@@ -5494,6 +5539,8 @@ BCMFASTPATH(dhd_prot_rxbuf_post)(dhd_pub_t *dhd, uint16 count, bool use_rsv_pkti
 						__FUNCTION__, __LINE__, dhd->rx_pktgetpool_fail));
 					break;
 				}
+#else
+				break;
 #endif /* RX_PKT_POOL */
 			}
 		}
@@ -6753,6 +6800,11 @@ BCMFASTPATH(dhd_prot_process_msgbuf_rxcpl)(dhd_pub_t *dhd, int ringtype, uint32 
 					DHD_ERROR(("Received non 802.11 packet, "
 						"when monitor mode is enabled\n"));
 				}
+			} else if (dhd->op_mode == DHD_FLAG_MFG_MODE &&
+					msg->flags & BCMPCIE_PKT_FLAGS_FRAME_802_11) {
+				DHD_TRACE(("Monitor disable, PKTFREE\n"));
+				PKTFREE(dhd->osh, pkt, TRUE);
+				continue;
 #ifdef DBG_PKT_MON
 			} else {
 				if (msg->flags & BCMPCIE_PKT_FLAGS_FRAME_802_11) {
@@ -9465,10 +9517,16 @@ dhd_msgbuf_iovar_timeout_dump(dhd_pub_t *dhd)
 			g_assert_type = 2;
 			/* use ASSERT() to trigger panic */
 			ASSERT(0);
+			return;
 		}
 #endif /* DHD_KERNEL_SCHED_DEBUG && DHD_FW_COREDUMP */
 
 	/* Check the PCIe link status by reading intstatus register */
+	if (!dhd || !dhd->bus || !dhd->bus->sih) {
+		DHD_ERROR(("%s: skip due to invalid parameter\n", __FUNCTION__));
+		ASSERT(0);
+		return;
+	}
 	intstatus = si_corereg(dhd->bus->sih,
 		dhd->bus->sih->buscoreidx, dhd->bus->pcie_mailbox_int, 0, 0);
 	if (intstatus == (uint32)-1) {
@@ -12429,6 +12487,536 @@ dhd_prot_process_d2h_ring_config_complete(dhd_pub_t *dhd, void *msg)
 		prot->d2hring_md_cpl->linked_ring = NULL;
 	}
 }
+
+#ifdef WL_CFGVENDOR_SEND_HANG_EVENT
+void
+copy_ext_trap_sig(dhd_pub_t *dhd, trap_t *tr)
+{
+	uint32 *ext_data = dhd->extended_trap_data;
+	hnd_ext_trap_hdr_t *hdr;
+	const bcm_tlv_t *tlv;
+
+	if (ext_data == NULL) {
+		return;
+	}
+	/* First word is original trap_data */
+	ext_data++;
+
+	/* Followed by the extended trap data header */
+	hdr = (hnd_ext_trap_hdr_t *)ext_data;
+
+	tlv = bcm_parse_tlvs(hdr->data, hdr->len, TAG_TRAP_SIGNATURE);
+	if (tlv) {
+		memcpy(tr, &tlv->data, sizeof(struct _trap_struct));
+	}
+}
+#define TRAP_T_NAME_OFFSET(var) {#var, OFFSETOF(trap_t, var)}
+
+typedef struct {
+	char name[HANG_INFO_TRAP_T_NAME_MAX];
+	uint32 offset;
+} hang_info_trap_t;
+
+#ifdef DHD_EWPR_VER2
+static hang_info_trap_t hang_info_trap_tbl[] = {
+	{"reason", 0},
+	{"ver", VENDOR_SEND_HANG_EXT_INFO_VER},
+	{"stype", 0},
+	TRAP_T_NAME_OFFSET(type),
+	TRAP_T_NAME_OFFSET(epc),
+	{"resrvd", 0},
+	{"resrvd", 0},
+	{"resrvd", 0},
+	{"resrvd", 0},
+	{"", 0}
+};
+#else
+static hang_info_trap_t hang_info_trap_tbl[] = {
+	{"reason", 0},
+	{"ver", VENDOR_SEND_HANG_EXT_INFO_VER},
+	{"stype", 0},
+	TRAP_T_NAME_OFFSET(type),
+	TRAP_T_NAME_OFFSET(epc),
+	TRAP_T_NAME_OFFSET(cpsr),
+	TRAP_T_NAME_OFFSET(spsr),
+	TRAP_T_NAME_OFFSET(r0),
+	TRAP_T_NAME_OFFSET(r1),
+	TRAP_T_NAME_OFFSET(r2),
+	TRAP_T_NAME_OFFSET(r3),
+	TRAP_T_NAME_OFFSET(r4),
+	TRAP_T_NAME_OFFSET(r5),
+	TRAP_T_NAME_OFFSET(r6),
+	TRAP_T_NAME_OFFSET(r7),
+	TRAP_T_NAME_OFFSET(r8),
+	TRAP_T_NAME_OFFSET(r9),
+	TRAP_T_NAME_OFFSET(r10),
+	TRAP_T_NAME_OFFSET(r11),
+	TRAP_T_NAME_OFFSET(r12),
+	TRAP_T_NAME_OFFSET(r13),
+	TRAP_T_NAME_OFFSET(r14),
+	TRAP_T_NAME_OFFSET(pc),
+	{"", 0}
+};
+#endif /* DHD_EWPR_VER2 */
+
+#define TAG_TRAP_IS_STATE(tag) \
+	((tag == TAG_TRAP_MEMORY) || (tag == TAG_TRAP_PCIE_Q) || \
+	(tag == TAG_TRAP_WLC_STATE) || (tag == TAG_TRAP_LOG_DATA) || \
+	(tag == TAG_TRAP_CODE))
+
+static void
+copy_hang_info_head(char *dest, trap_t *src, int len, int field_name,
+		int *bytes_written, int *cnt, char *cookie)
+{
+	uint8 *ptr;
+	int remain_len;
+	int i;
+
+	ptr = (uint8 *)src;
+
+	memset(dest, 0, len);
+	remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+
+	/* hang reason, hang info ver */
+	for (i = 0; (i < HANG_INFO_TRAP_T_SUBTYPE_IDX) && (*cnt < HANG_FIELD_CNT_MAX);
+			i++, (*cnt)++) {
+		if (field_name) {
+			remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+			*bytes_written += scnprintf(&dest[*bytes_written], remain_len, "%s:%c",
+					hang_info_trap_tbl[i].name, HANG_KEY_DEL);
+		}
+		remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+		*bytes_written += scnprintf(&dest[*bytes_written], remain_len, "%d%c",
+				hang_info_trap_tbl[i].offset, HANG_KEY_DEL);
+
+	}
+
+	if (*cnt < HANG_FIELD_CNT_MAX) {
+		if (field_name) {
+			remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+			*bytes_written += scnprintf(&dest[*bytes_written], remain_len, "%s:%c",
+					"cookie", HANG_KEY_DEL);
+		}
+		remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+		*bytes_written += scnprintf(&dest[*bytes_written], remain_len, "%s%c",
+				cookie, HANG_KEY_DEL);
+		(*cnt)++;
+	}
+
+	if (*cnt < HANG_FIELD_CNT_MAX) {
+		if (field_name) {
+			remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+			*bytes_written += scnprintf(&dest[*bytes_written], remain_len, "%s:%c",
+					hang_info_trap_tbl[HANG_INFO_TRAP_T_SUBTYPE_IDX].name,
+					HANG_KEY_DEL);
+		}
+		remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+		*bytes_written += scnprintf(&dest[*bytes_written], remain_len, "%08x%c",
+				hang_info_trap_tbl[HANG_INFO_TRAP_T_SUBTYPE_IDX].offset,
+				HANG_KEY_DEL);
+		(*cnt)++;
+	}
+
+	if (*cnt < HANG_FIELD_CNT_MAX) {
+		if (field_name) {
+			remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+			*bytes_written += scnprintf(&dest[*bytes_written], remain_len, "%s:%c",
+					hang_info_trap_tbl[HANG_INFO_TRAP_T_EPC_IDX].name,
+					HANG_KEY_DEL);
+		}
+		remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+		*bytes_written += scnprintf(&dest[*bytes_written], remain_len, "%08x%c",
+				*(uint32 *)
+				(ptr + hang_info_trap_tbl[HANG_INFO_TRAP_T_EPC_IDX].offset),
+				HANG_KEY_DEL);
+		(*cnt)++;
+	}
+#ifdef DHD_EWPR_VER2
+	/* put 0 for HG03 ~ HG06 (reserved for future use) */
+	for (i = 0; (i < HANG_INFO_BIGDATA_EXTRA_KEY) && (*cnt < HANG_FIELD_CNT_MAX);
+			i++, (*cnt)++) {
+		if (field_name) {
+			remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+			*bytes_written += scnprintf(&dest[*bytes_written], remain_len, "%s:%c",
+				hang_info_trap_tbl[HANG_INFO_TRAP_T_EXTRA_KEY_IDX+i].name,
+				HANG_KEY_DEL);
+		}
+		remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+		*bytes_written += scnprintf(&dest[*bytes_written], remain_len, "%d%c",
+			hang_info_trap_tbl[HANG_INFO_TRAP_T_EXTRA_KEY_IDX+i].offset,
+			HANG_KEY_DEL);
+	}
+#endif /* DHD_EWPR_VER2 */
+}
+#ifndef DHD_EWPR_VER2
+static void
+copy_hang_info_trap_t(char *dest, trap_t *src, int len, int field_name,
+		int *bytes_written, int *cnt, char *cookie)
+{
+	uint8 *ptr;
+	int remain_len;
+	int i;
+
+	ptr = (uint8 *)src;
+
+	remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+
+	for (i = HANG_INFO_TRAP_T_OFFSET_IDX;
+			(hang_info_trap_tbl[i].name[0] != 0) && (*cnt < HANG_FIELD_CNT_MAX);
+			i++, (*cnt)++) {
+		if (field_name) {
+			remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+			*bytes_written += scnprintf(&dest[*bytes_written], remain_len, "%c%s:",
+					HANG_RAW_DEL, hang_info_trap_tbl[i].name);
+		}
+		remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+		*bytes_written += scnprintf(&dest[*bytes_written], remain_len, "%c%08x",
+				HANG_RAW_DEL, *(uint32 *)(ptr + hang_info_trap_tbl[i].offset));
+	}
+}
+
+static void
+copy_hang_info_stack(dhd_pub_t *dhd, char *dest, int *bytes_written, int *cnt)
+{
+	int remain_len;
+	int i = 0;
+	const uint32 *stack;
+	uint32 *ext_data = dhd->extended_trap_data;
+	hnd_ext_trap_hdr_t *hdr;
+	const bcm_tlv_t *tlv;
+	int remain_stack_cnt = 0;
+	uint32 dummy_data = 0;
+	int bigdata_key_stack_cnt = 0;
+
+	if (ext_data == NULL) {
+		return;
+	}
+	/* First word is original trap_data */
+	ext_data++;
+
+	/* Followed by the extended trap data header */
+	hdr = (hnd_ext_trap_hdr_t *)ext_data;
+
+	tlv = bcm_parse_tlvs(hdr->data, hdr->len, TAG_TRAP_STACK);
+
+	remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+
+	GCC_DIAGNOSTIC_PUSH_SUPPRESS_CAST();
+	if (tlv) {
+		stack = (const uint32 *)tlv->data;
+		*bytes_written += scnprintf(&dest[*bytes_written], remain_len,
+				"%08x", *(uint32 *)(stack++));
+		(*cnt)++;
+		if (*cnt >= HANG_FIELD_CNT_MAX) {
+			return;
+		}
+		for (i = 1; i < (uint32)(tlv->len / sizeof(uint32)); i++, bigdata_key_stack_cnt++) {
+			remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+			/* Raw data for bigdata use '_' and Key data for bigdata use space */
+			*bytes_written += scnprintf(&dest[*bytes_written], remain_len,
+				"%c%08x",
+				i <= HANG_INFO_BIGDATA_KEY_STACK_CNT ? HANG_KEY_DEL : HANG_RAW_DEL,
+				*(uint32 *)(stack++));
+
+			(*cnt)++;
+			if ((*cnt >= HANG_FIELD_CNT_MAX) ||
+					(i >= HANG_FIELD_TRAP_T_STACK_CNT_MAX)) {
+				return;
+			}
+		}
+	}
+
+	remain_stack_cnt = HANG_FIELD_TRAP_T_STACK_CNT_MAX - i;
+
+	for (i = 0; i < remain_stack_cnt; i++) {
+		remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+		*bytes_written += scnprintf(&dest[*bytes_written], remain_len, "%c%08x",
+				HANG_RAW_DEL, dummy_data);
+		(*cnt)++;
+		if (*cnt >= HANG_FIELD_CNT_MAX) {
+			return;
+		}
+	}
+	GCC_DIAGNOSTIC_POP();
+
+}
+
+static void
+copy_hang_info_specific(dhd_pub_t *dhd, char *dest, int *bytes_written, int *cnt)
+{
+	int remain_len;
+	int i;
+	const uint32 *data;
+	uint32 *ext_data = dhd->extended_trap_data;
+	hnd_ext_trap_hdr_t *hdr;
+	const bcm_tlv_t *tlv;
+	int remain_trap_data = 0;
+	uint8 buf_u8[sizeof(uint32)] = { 0, };
+	const uint8 *p_u8;
+
+	if (ext_data == NULL) {
+		return;
+	}
+	/* First word is original trap_data */
+	ext_data++;
+
+	/* Followed by the extended trap data header */
+	hdr = (hnd_ext_trap_hdr_t *)ext_data;
+
+	tlv = bcm_parse_tlvs(hdr->data, hdr->len, TAG_TRAP_SIGNATURE);
+	if (tlv) {
+		/* header include tlv hader */
+		remain_trap_data = (hdr->len - tlv->len - sizeof(uint16));
+	}
+
+	tlv = bcm_parse_tlvs(hdr->data, hdr->len, TAG_TRAP_STACK);
+	if (tlv) {
+		/* header include tlv hader */
+		remain_trap_data -= (tlv->len + sizeof(uint16));
+	}
+
+	data = (const uint32 *)(hdr->data + (hdr->len  - remain_trap_data));
+
+	remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+
+	for (i = 0; i < (uint32)(remain_trap_data / sizeof(uint32)) && *cnt < HANG_FIELD_CNT_MAX;
+			i++, (*cnt)++) {
+		remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+		GCC_DIAGNOSTIC_PUSH_SUPPRESS_CAST();
+		*bytes_written += scnprintf(&dest[*bytes_written], remain_len, "%c%08x",
+				HANG_RAW_DEL, *(uint32 *)(data++));
+		GCC_DIAGNOSTIC_POP();
+	}
+
+	if (*cnt >= HANG_FIELD_CNT_MAX) {
+		return;
+	}
+
+	remain_trap_data -= (sizeof(uint32) * i);
+
+	if (remain_trap_data > sizeof(buf_u8)) {
+		DHD_ERROR(("%s: resize remain_trap_data\n", __FUNCTION__));
+		remain_trap_data =  sizeof(buf_u8);
+	}
+
+	if (remain_trap_data) {
+		p_u8 = (const uint8 *)data;
+		for (i = 0; i < remain_trap_data; i++) {
+			buf_u8[i] = *(const uint8 *)(p_u8++);
+		}
+
+		remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+		*bytes_written += scnprintf(&dest[*bytes_written], remain_len, "%c%08x",
+				HANG_RAW_DEL, ltoh32_ua(buf_u8));
+		(*cnt)++;
+	}
+}
+#endif /* DHD_EWPR_VER2 */
+
+static void
+get_hang_info_trap_subtype(dhd_pub_t *dhd, uint32 *subtype)
+{
+	uint32 i;
+	uint32 *ext_data = dhd->extended_trap_data;
+	hnd_ext_trap_hdr_t *hdr;
+	const bcm_tlv_t *tlv;
+
+	/* First word is original trap_data */
+	ext_data++;
+
+	/* Followed by the extended trap data header */
+	hdr = (hnd_ext_trap_hdr_t *)ext_data;
+
+	/* Dump a list of all tags found  before parsing data */
+	for (i = TAG_TRAP_DEEPSLEEP; i < TAG_TRAP_LAST; i++) {
+		tlv = bcm_parse_tlvs(hdr->data, hdr->len, i);
+		if (tlv) {
+			if (!TAG_TRAP_IS_STATE(i)) {
+				*subtype = i;
+				return;
+			}
+		}
+	}
+}
+#ifdef DHD_EWPR_VER2
+static void
+copy_hang_info_etd_base64(dhd_pub_t *dhd, char *dest, int *bytes_written, int *cnt)
+{
+	int remain_len;
+	uint32 *ext_data = dhd->extended_trap_data;
+	hnd_ext_trap_hdr_t *hdr;
+	char *base64_out = NULL;
+	int base64_cnt;
+	int max_base64_len = HANG_INFO_BASE64_BUFFER_SIZE;
+
+	if (ext_data == NULL) {
+		return;
+	}
+	/* First word is original trap_data */
+	ext_data++;
+
+	/* Followed by the extended trap data header */
+	hdr = (hnd_ext_trap_hdr_t *)ext_data;
+
+	remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+
+	if (remain_len <= 0) {
+		DHD_ERROR(("%s: no space to put etd\n", __FUNCTION__));
+		return;
+	}
+
+	if (remain_len < max_base64_len) {
+		DHD_ERROR(("%s: change max base64 length to remain length %d\n", __FUNCTION__,
+			remain_len));
+		max_base64_len = remain_len;
+	}
+
+	base64_out = MALLOCZ(dhd->osh, HANG_INFO_BASE64_BUFFER_SIZE);
+	if (base64_out == NULL) {
+		DHD_ERROR(("%s: MALLOC failed for size %d\n",
+			__FUNCTION__, HANG_INFO_BASE64_BUFFER_SIZE));
+		return;
+	}
+
+	if (hdr->len > 0) {
+		base64_cnt = dhd_base64_encode(hdr->data, hdr->len, base64_out, max_base64_len);
+		if (base64_cnt == 0) {
+			DHD_ERROR(("%s: base64 encoding error\n", __FUNCTION__));
+		}
+	}
+
+	*bytes_written += scnprintf(&dest[*bytes_written], remain_len, "%s",
+			base64_out);
+	(*cnt)++;
+	MFREE(dhd->osh, base64_out, HANG_INFO_BASE64_BUFFER_SIZE);
+}
+#endif /* DHD_EWPR_VER2 */
+
+void
+copy_hang_info_trap(dhd_pub_t *dhd)
+{
+	trap_t tr;
+	int bytes_written;
+	int trap_subtype = 0;
+
+	if (!dhd || !dhd->hang_info) {
+		DHD_ERROR(("%s dhd=%p hang_info=%p\n", __FUNCTION__,
+			dhd, (dhd ? dhd->hang_info : NULL)));
+		return;
+	}
+
+	if (!dhd->dongle_trap_occured) {
+		DHD_ERROR(("%s: dongle_trap_occured is FALSE\n", __FUNCTION__));
+		return;
+	}
+
+	memset(&tr, 0x00, sizeof(struct _trap_struct));
+
+	copy_ext_trap_sig(dhd, &tr);
+	get_hang_info_trap_subtype(dhd, &trap_subtype);
+
+	hang_info_trap_tbl[HANG_INFO_TRAP_T_REASON_IDX].offset = HANG_REASON_DONGLE_TRAP;
+	hang_info_trap_tbl[HANG_INFO_TRAP_T_SUBTYPE_IDX].offset = trap_subtype;
+
+	bytes_written = 0;
+	dhd->hang_info_cnt = 0;
+	get_debug_dump_time(dhd->debug_dump_time_hang_str);
+	copy_debug_dump_time(dhd->debug_dump_time_str, dhd->debug_dump_time_hang_str);
+
+	copy_hang_info_head(dhd->hang_info, &tr, VENDOR_SEND_HANG_EXT_INFO_LEN, FALSE,
+			&bytes_written, &dhd->hang_info_cnt, dhd->debug_dump_time_hang_str);
+
+	DHD_INFO(("hang info head cnt: %d len: %d data: %s\n",
+		dhd->hang_info_cnt, (int)strlen(dhd->hang_info), dhd->hang_info));
+
+	clear_debug_dump_time(dhd->debug_dump_time_hang_str);
+
+#ifdef DHD_EWPR_VER2
+	/* stack info & trap info are included in etd data */
+
+	/* extended trap data dump */
+	if (dhd->hang_info_cnt < HANG_FIELD_CNT_MAX) {
+		copy_hang_info_etd_base64(dhd, dhd->hang_info, &bytes_written, &dhd->hang_info_cnt);
+		DHD_INFO(("hang info specific cnt: %d len: %d data: %s\n",
+			dhd->hang_info_cnt, (int)strlen(dhd->hang_info), dhd->hang_info));
+	}
+#else
+	if (dhd->hang_info_cnt < HANG_FIELD_CNT_MAX) {
+		copy_hang_info_stack(dhd, dhd->hang_info, &bytes_written, &dhd->hang_info_cnt);
+		DHD_INFO(("hang info stack cnt: %d len: %d data: %s\n",
+			dhd->hang_info_cnt, (int)strlen(dhd->hang_info), dhd->hang_info));
+	}
+
+	if (dhd->hang_info_cnt < HANG_FIELD_CNT_MAX) {
+		copy_hang_info_trap_t(dhd->hang_info, &tr, VENDOR_SEND_HANG_EXT_INFO_LEN, FALSE,
+				&bytes_written, &dhd->hang_info_cnt, dhd->debug_dump_time_hang_str);
+		DHD_INFO(("hang info trap_t cnt: %d len: %d data: %s\n",
+			dhd->hang_info_cnt, (int)strlen(dhd->hang_info), dhd->hang_info));
+	}
+
+	if (dhd->hang_info_cnt < HANG_FIELD_CNT_MAX) {
+		copy_hang_info_specific(dhd, dhd->hang_info, &bytes_written, &dhd->hang_info_cnt);
+		DHD_INFO(("hang info specific cnt: %d len: %d data: %s\n",
+			dhd->hang_info_cnt, (int)strlen(dhd->hang_info), dhd->hang_info));
+	}
+#endif /* DHD_EWPR_VER2 */
+}
+
+void
+copy_hang_info_linkdown(dhd_pub_t *dhd)
+{
+	int bytes_written = 0;
+	int remain_len;
+
+	if (!dhd || !dhd->hang_info) {
+		DHD_ERROR(("%s dhd=%p hang_info=%p\n", __FUNCTION__,
+			dhd, (dhd ? dhd->hang_info : NULL)));
+		return;
+	}
+
+	if (!dhd->bus->is_linkdown) {
+		DHD_ERROR(("%s: link down is not happened\n", __FUNCTION__));
+		return;
+	}
+
+	dhd->hang_info_cnt = 0;
+
+	get_debug_dump_time(dhd->debug_dump_time_hang_str);
+	copy_debug_dump_time(dhd->debug_dump_time_str, dhd->debug_dump_time_hang_str);
+
+#ifdef BCMPCIE
+	/* hang reason code (0x8808) */
+	if (dhd->hang_info_cnt < HANG_FIELD_CNT_MAX) {
+		remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - bytes_written;
+		bytes_written += scnprintf(&dhd->hang_info[bytes_written], remain_len, "%d%c",
+				HANG_REASON_PCIE_LINK_DOWN_EP_DETECT, HANG_KEY_DEL);
+		dhd->hang_info_cnt++;
+	}
+#endif
+
+	/* EWP version */
+	if (dhd->hang_info_cnt < HANG_FIELD_CNT_MAX) {
+		remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - bytes_written;
+		bytes_written += scnprintf(&dhd->hang_info[bytes_written], remain_len, "%d%c",
+				VENDOR_SEND_HANG_EXT_INFO_VER, HANG_KEY_DEL);
+		dhd->hang_info_cnt++;
+	}
+
+	/* cookie - dump time stamp */
+	if (dhd->hang_info_cnt < HANG_FIELD_CNT_MAX) {
+		remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - bytes_written;
+		bytes_written += scnprintf(&dhd->hang_info[bytes_written], remain_len, "%s%c",
+				dhd->debug_dump_time_hang_str, HANG_KEY_DEL);
+		dhd->hang_info_cnt++;
+	}
+
+	clear_debug_dump_time(dhd->debug_dump_time_hang_str);
+
+	DHD_INFO(("hang info haed cnt: %d len: %d data: %s\n",
+		dhd->hang_info_cnt, (int)strlen(dhd->hang_info), dhd->hang_info));
+
+}
+#endif /* WL_CFGVENDOR_SEND_HANG_EVENT */
 
 void
 dhd_prot_ctrl_info_print(dhd_pub_t *dhd)

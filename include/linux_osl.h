@@ -1,7 +1,26 @@
 /*
  * Linux OS Independent Layer
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2024 Synaptics Incorporated. All rights reserved.
+ *
+ * This software is licensed to you under the terms of the
+ * GNU General Public License version 2 (the "GPL") with Broadcom special exception.
+ *
+ * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
+ * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
+ * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
+ * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
+ * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION
+ * DOES NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES,
+ * SYNAPTICS' TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT
+ * EXCEED ONE HUNDRED U.S. DOLLARS
+ *
+ * Copyright (C) 2024, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -243,6 +262,15 @@ extern void *osl_mallocz(osl_t *osh, uint size);
 extern void *osl_dma_mallocz(osl_t *osh, uint size, uint *dmable_size);
 extern void osl_mfree(osl_t *osh, void *addr, uint size);
 extern void osl_dma_mfree(osl_t *osh, void *addr, uint size);
+
+#ifdef DHD_USE_KMEM_CACHE_USERCOPY
+#define KMEM_CACHE_USERCOPY_MAXLEN_32K (32768u)
+#define KMEM_CACHE_ALLOC_USERCOPY(osh) osl_kmem_cache_alloc_usercopy((osh))
+#define KMEM_CACHE_FREE_USERCOPY(osh, addr) osl_kmem_cache_free_usercopy((osh), (addr))
+extern void *osl_kmem_cache_alloc_usercopy(osl_t *osh);
+extern void osl_kmem_cache_free_usercopy(osl_t *osh, void *addr);
+#endif /* DHD_USE_KMEM_CACHE_USERCOPY */
+
 #define MALLOC_NODBG(osh, size)		osl_malloc((osh), (size))
 #define MALLOCZ_NODBG(osh, size)	osl_mallocz((osh), (size))
 #define MFREE_NODBG(osh, addr, size)	({osl_mfree((osh), ((void *)addr), (size));(addr) = NULL;})
@@ -896,7 +924,7 @@ typedef struct osl_timer {
 
 typedef void (*linux_timer_fn)(ulong arg);
 
-extern osl_timer_t * osl_timer_init(osl_t *osh, const char *name, void (*fn)(void *arg), void *arg);
+extern osl_timer_t * osl_timer_init(osl_t *osh, const char *name, void (*fn)(ulong arg), void *arg);
 extern void osl_timer_add(osl_t *osh, osl_timer_t *t, uint32 ms, bool periodic);
 extern void osl_timer_update(osl_t *osh, osl_timer_t *t, uint32 ms, bool periodic);
 extern bool osl_timer_del(osl_t *osh, osl_timer_t *t);
@@ -921,6 +949,15 @@ typedef atomic_t osl_atomic_t;
 #define OSL_ATOMIC_AND(osh, v, x)	atomic_clear_mask(~x, v)
 #endif
 #endif /* BCMDRIVER */
+
+/* kvmalloc was added from kernel ver 4.12 */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 12, 0))
+#define KVZALLOC(size, flags)	kzalloc(size, flags)
+#define KVFREE(osh, addr)	kfree(addr)
+#else
+#define KVZALLOC(size, flags)	kvzalloc(size, flags)
+#define KVFREE(osh, addr)	kvfree(addr)
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(4, 12, 0) */
 
 extern void *osl_spin_lock_init(osl_t *osh);
 extern void osl_spin_lock_deinit(osl_t *osh, void *lock);
